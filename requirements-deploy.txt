@@ -1,0 +1,12 @@
+# Dependencies for the Hugging Face Space container (see Dockerfile / DEPLOY.md).
+# Mirrors the runtime deps in pyproject.toml. llama-cpp-python is built from
+# source here (the image has a compiler), so there's no prebuilt-wheel / CPU
+# instruction-set concern like there was on the Windows dev machine.
+httpx>=0.27
+truststore>=0.10
+trafilatura>=1.12
+ingredient-parser-nlp>=1.0
+llama-cpp-python==0.3.19
+pydantic>=2.9
+streamlit>=1.39
+pandas>=2.0

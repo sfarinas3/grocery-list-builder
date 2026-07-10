@@ -1,0 +1,10 @@
+# Keep the build context (and the git push to the Space) small.
+.venv/
+models/            # the model is downloaded during the image build, not shipped
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.git/
+docs/
+tests/

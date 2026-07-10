@@ -1,0 +1,45 @@
+# Project metadata + dependencies — the single source of truth for this project.
+# Managed with uv:  `uv sync` installs everything into .venv, `uv run ...` runs it.
+[project]
+name = "grocery-list-builder-bot"
+version = "0.1.0"
+description = "Turn recipe web links into a consolidated, editable grocery list using an LLM."
+readme = "README.md"
+requires-python = ">=3.12"
+
+# Runtime dependencies. Kept lean on purpose (design principle: concise / YAGNI).
+# We add libraries as each pipeline step needs them, not before.
+dependencies = [
+    "httpx>=0.27",           # fetch recipe web pages
+    "truststore>=0.10",      # make httpx/huggingface trust the OS cert store (corporate TLS proxy)
+    "trafilatura>=1.12",     # strip a page down to readable main content (text fallback)
+    "ingredient-parser-nlp>=1.0",  # CRF model: ingredient line -> {qty, unit, name, comment}
+    "llama-cpp-python==0.3.19",  # local GGUF model on CPU (pinned: prebuilt AVX2 wheel; newer wheels use AVX512 this CPU lacks)
+    "pydantic>=2.9",         # the shared data contract in models.py (validation for free)
+    "streamlit>=1.39",       # the on-screen UI (app.py)
+]
+
+# Development-only tools (installed with `uv sync`, not shipped).
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+# No [build-system] on purpose: this is an application, not a library, so uv
+# just manages the environment and we run modules from the project root.
+[tool.uv]
+package = false
+# This machine is behind a TLS-inspecting corporate proxy, so uv must trust the
+# system certificate store. Without this, `uv sync`/`uv add` fail with an
+# "UnknownIssuer" certificate error.
+system-certs = true
+
+# Pull llama-cpp-python from the maintainer's prebuilt CPU wheel index so it
+# installs without a local C++ toolchain (there's no compiler on this machine).
+[[tool.uv.index]]
+name = "llama-cpp-python-cpu"
+url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+llama-cpp-python = { index = "llama-cpp-python-cpu" }
