@@ -1,4 +1,38 @@
-# Deploying to a free Hugging Face Space
+# Deploying
+
+Two paths: a **free lite deploy** (no model) on Streamlit Community Cloud, and a
+**full-app deploy** (with the local model) that needs real RAM.
+
+---
+
+## Option A — Streamlit Community Cloud (lite, free)
+
+Runs the **lite** version: JSON-LD recipes work fully; pages without structured
+data can't be auto-extracted (no model), and categorization is lookup-only. The
+app auto-detects that `llama-cpp-python` isn't installed and switches to lite —
+no config needed. Streamlit Cloud installs from `requirements.txt` (which has no
+model deps); the full `pyproject.toml` stack is only used locally.
+
+1. **Push this repo to GitHub** (public is simplest for the free tier):
+   ```bash
+   # create an empty repo at github.com first, then:
+   git remote add origin https://github.com/<your-username>/grocery-list-builder.git
+   git push -u origin main      # username + a GitHub token/password when prompted
+   ```
+2. Go to **share.streamlit.io** → sign in with GitHub → **Create app** →
+   pick the repo, **branch `main`**, **main file `app.py`** → Deploy.
+3. It installs `requirements.txt`, boots in **lite mode**, and gives you a public
+   `*.streamlit.app` URL. First load also downloads a small NLTK data file.
+
+Nothing to configure — the sidebar will show a "Lite mode" notice.
+
+---
+
+## Option B — Hugging Face Space (full app, with the model)
+
+> **Note:** HF now gates Docker/CPU-basic Spaces behind paid tiers for new free
+> accounts (free = ZeroGPU, Gradio-only), so this is no longer a free path. Kept
+> here for reference / a paid CPU Space or as a template for a self-hosted box.
 
 This deploys the **full app** (including the local model) to Hugging Face Spaces'
 free CPU tier (2 vCPU, 16 GB RAM). The model is baked into the image at build

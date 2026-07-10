@@ -36,6 +36,20 @@ _SYSTEM_PROMPT = (
 )
 
 
+def _safe_json(raw: str) -> dict:
+    """Parse model output as a JSON object, returning {} if it's malformed.
+
+    Grammar-constrained decoding keeps output JSON-shaped, but a weak model can
+    ramble past max_tokens and get truncated into invalid JSON. Callers treat {}
+    as "the model gave us nothing usable" and degrade gracefully.
+    """
+    try:
+        result = json.loads(raw)
+        return result if isinstance(result, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
 class LocalLLMExtractor:
     """`Extractor` backed by a local GGUF model (see `extract/base.py`)."""
 
@@ -75,9 +89,10 @@ class LocalLLMExtractor:
             max_tokens=2048,
         )
         raw = response["choices"][0]["message"]["content"]
-        # Grammar guarantees valid JSON matching the schema, so this won't raise;
-        # we still normalize (strip, drop blanks) the way the JSON-LD path does.
-        lines = json.loads(raw).get("ingredient_lines", [])
+        # Grammar keeps the output JSON-shaped, but a weak model can ramble until
+        # it's truncated at max_tokens, leaving incomplete JSON — degrade to "no
+        # lines" rather than crashing the whole pipeline.
+        lines = _safe_json(raw).get("ingredient_lines", [])
         return [line.strip() for line in lines if isinstance(line, str) and line.strip()]
 
     def categorize(self, names: list[str], categories: list[str]) -> dict[str, str]:
@@ -118,5 +133,5 @@ class LocalLLMExtractor:
             max_tokens=1024,
         )
         raw = response["choices"][0]["message"]["content"]
-        assignments = json.loads(raw).get("assignments", [])
+        assignments = _safe_json(raw).get("assignments", [])
         return {a["name"]: a["category"] for a in assignments if "name" in a and "category" in a}

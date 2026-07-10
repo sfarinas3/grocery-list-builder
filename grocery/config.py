@@ -35,6 +35,13 @@ LLM_URL = f"https://modelscope.cn/models/{MODELSCOPE_REPO}/resolve/master/{LLM_F
 MODELS_DIR = Path(os.environ.get("GROCERY_MODELS_DIR", Path(__file__).resolve().parent.parent / "models"))
 LLM_PATH = MODELS_DIR / LLM_FILE
 
+# Which extraction backend to use:
+#   "auto"  — use the local model if `llama-cpp-python` is installed, else lite
+#   "local" — require the local model (error if it isn't installed)
+#   "lite"  — model-free (JSON-LD + lookup only); for low-RAM hosts like the
+#             free Streamlit Community Cloud tier
+BACKEND = os.environ.get("GROCERY_BACKEND", "auto")
+
 # Context window. Recipes are short; a modest window keeps CPU inference quick.
 LLM_CONTEXT = 8192
 # Cap on the readable text we feed the model (chars). Guards against a giant

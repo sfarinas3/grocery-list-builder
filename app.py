@@ -17,15 +17,36 @@ import streamlit as st
 from grocery import config
 from grocery.aggregate.combine import combine
 from grocery.ingest.web import IngestError
-from grocery.extract.local_llm import LocalLLMExtractor
 from grocery.models import DEFAULT_CATEGORY, Ingredient
 from grocery.pipeline import process_url
 
 
 @st.cache_resource(show_spinner=False)
-def get_extractor() -> LocalLLMExtractor:
-    """One shared model-backed extractor, kept loaded across Streamlit reruns."""
-    return LocalLLMExtractor()
+def get_extractor():
+    """The shared extraction backend, chosen by `config.BACKEND`.
+
+    Tries the local model unless BACKEND is "lite"; falls back to the model-free
+    `LiteExtractor` when `llama-cpp-python` isn't installed (e.g. on Streamlit
+    Cloud). Imports are lazy so the heavy model library is only touched when the
+    local backend is actually used.
+    """
+    if config.BACKEND != "lite":
+        try:
+            from grocery.extract.local_llm import LocalLLMExtractor
+
+            return LocalLLMExtractor()
+        except ImportError:
+            if config.BACKEND == "local":
+                raise  # explicitly requested the model but it isn't installed
+
+    from grocery.extract.lite import LiteExtractor
+
+    return LiteExtractor()
+
+
+def running_lite() -> bool:
+    """True when the active backend is the model-free LiteExtractor."""
+    return type(get_extractor()).__name__ == "LiteExtractor"
 
 
 @st.cache_data(show_spinner=False)
@@ -104,13 +125,21 @@ st.caption("Paste one or more recipe links — I'll pull out the ingredients. Ru
 
 with st.sidebar:
     st.header("Settings")
-    use_llm = st.checkbox(
-        "Use the local AI model for unknown categories",
-        value=True,
-        help="The model is also required for pages that lack structured recipe data. "
-        "The first time it runs, it loads the model (~30s on this machine).",
-    )
-    st.caption(f"Model: `{config.LLM_FILE}`")
+    if running_lite():
+        use_llm = False
+        st.info(
+            "**Lite mode** — no local model. Recipes with structured data work fully; "
+            "pages without it can't be auto-extracted here, and unusual ingredients "
+            "are categorized by lookup only. Run locally for full extraction."
+        )
+    else:
+        use_llm = st.checkbox(
+            "Use the local AI model for unknown categories",
+            value=True,
+            help="The model is also required for pages that lack structured recipe data. "
+            "The first time it runs, it loads the model (~30s on this machine).",
+        )
+        st.caption(f"Model: `{config.LLM_FILE}`")
 
 urls_text = st.text_area(
     "Recipe URLs",
@@ -142,6 +171,17 @@ if st.button("Build list", type="primary"):
             except Exception as exc:  # noqa: BLE001 — surface anything else to the user
                 st.error(f"Unexpected error for {url}: {exc}")
                 continue
+
+        if not ingredients:
+            if running_lite():
+                st.warning(
+                    f"No structured recipe data at {url}, and the AI model isn't available "
+                    "in lite mode — skipped. Try a site with a structured recipe, or run locally."
+                )
+            else:
+                st.warning(f"No ingredients found for {url} — the page may be unsupported.")
+            continue
+
         results.append((content.title or url, content, ingredients))
 
     if results:

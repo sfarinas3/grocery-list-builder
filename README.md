@@ -1,13 +1,3 @@
----
-title: Grocery List Builder
-emoji: 🛒
-colorFrom: green
-colorTo: blue
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # Grocery List Builder Bot
 
 Turn recipe web links into a consolidated, editable grocery list — runs fully

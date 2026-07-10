@@ -1,0 +1,14 @@
+# Dependencies for the Streamlit Community Cloud (lite) deploy.
+#
+# Streamlit Cloud uses requirements.txt in preference to pyproject.toml, so this
+# file — deliberately WITHOUT llama-cpp-python — is what runs in the cloud. The
+# app auto-detects the missing model library and runs in "lite" mode (JSON-LD +
+# lookup categorization, no local LLM). Local dev still uses pyproject.toml/uv
+# with the full model stack, unaffected by this file.
+httpx>=0.27
+truststore>=0.10
+trafilatura>=1.12
+ingredient-parser-nlp>=1.0
+pydantic>=2.9
+streamlit>=1.39
+pandas>=2.0
