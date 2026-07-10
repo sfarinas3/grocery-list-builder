@@ -24,6 +24,8 @@ def combine(recipes: list[tuple[str, list[Ingredient]]]) -> GroceryList:
     for recipe_name, ingredients in recipes:
         for ing in ingredients:
             key = ing.name.strip().lower() or "(unnamed)"
+            if key in config.EXCLUDE_FROM_LIST:
+                continue  # e.g. plain/pasta water — not a thing you buy
             if key not in groups:
                 groups[key] = []
                 order.append(key)

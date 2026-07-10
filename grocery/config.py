@@ -75,3 +75,23 @@ CATEGORIES = [
 # A merged quantity above this is almost certainly a parse error (e.g. a year or
 # a stray page number that got read as an amount) — flag it for review.
 SANITY_MAX_QUANTITY = 1000
+
+# Ingredients recipes list but you don't actually buy — dropped from the combined
+# grocery list (they still appear in the per-recipe breakdown). Matched on the
+# exact normalized (lowercased) ingredient name, so real products like "coconut
+# water" or "rose water" are NOT affected. Add your own as you notice them.
+EXCLUDE_FROM_LIST = {
+    "water",
+    "pasta water",
+    "cold water",
+    "warm water",
+    "hot water",
+    "ice water",
+    "boiling water",
+    "cooking water",
+    "reserved pasta water",
+    "lukewarm water",
+    "room temperature water",
+    "tap water",
+    "filtered water",
+}
