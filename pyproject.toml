@@ -7,16 +7,24 @@ description = "Turn recipe web links into a consolidated, editable grocery list 
 readme = "README.md"
 requires-python = ">=3.12"
 
-# Runtime dependencies. Kept lean on purpose (design principle: concise / YAGNI).
-# We add libraries as each pipeline step needs them, not before.
+# Base runtime dependencies — everything the LITE (model-free) app needs. This is
+# what a plain `uv sync` and low-RAM hosts (Streamlit Community Cloud) install.
 dependencies = [
     "httpx>=0.27",           # fetch recipe web pages
-    "truststore>=0.10",      # make httpx/huggingface trust the OS cert store (corporate TLS proxy)
+    "truststore>=0.10",      # make httpx/downloads trust the OS cert store (corporate TLS proxy)
     "trafilatura>=1.12",     # strip a page down to readable main content (text fallback)
     "ingredient-parser-nlp>=1.0",  # CRF model: ingredient line -> {qty, unit, name, comment}
-    "llama-cpp-python==0.3.19",  # local GGUF model on CPU (pinned: prebuilt AVX2 wheel; newer wheels use AVX512 this CPU lacks)
     "pydantic>=2.9",         # the shared data contract in models.py (validation for free)
     "streamlit>=1.39",       # the on-screen UI (app.py)
+    "pandas>=2.0",           # the editable list table (app.py)
+]
+
+# The local LLM is OPTIONAL — installed only for full local runs, never on hosts
+# that can't run it. Install it with:  uv sync --extra local
+# (Streamlit Cloud does a base `uv sync`, so it skips this and runs lite mode.)
+[project.optional-dependencies]
+local = [
+    "llama-cpp-python==0.3.19",  # local GGUF model on CPU (pinned: prebuilt AVX2 wheel; newer wheels use AVX512 this CPU lacks)
 ]
 
 # Development-only tools (installed with `uv sync`, not shipped).
@@ -30,9 +38,10 @@ dev = [
 [tool.uv]
 package = false
 # This machine is behind a TLS-inspecting corporate proxy, so uv must trust the
-# system certificate store. Without this, `uv sync`/`uv add` fail with an
-# "UnknownIssuer" certificate error.
-system-certs = true
+# OS certificate store. Without this, `uv sync`/`uv add` fail with an
+# "UnknownIssuer" certificate error. (Using `native-tls` rather than the newer
+# `system-certs` so older uv versions on deploy hosts don't choke on it.)
+native-tls = true
 
 # Pull llama-cpp-python from the maintainer's prebuilt CPU wheel index so it
 # installs without a local C++ toolchain (there's no compiler on this machine).

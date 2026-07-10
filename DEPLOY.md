@@ -10,8 +10,9 @@ Two paths: a **free lite deploy** (no model) on Streamlit Community Cloud, and a
 Runs the **lite** version: JSON-LD recipes work fully; pages without structured
 data can't be auto-extracted (no model), and categorization is lookup-only. The
 app auto-detects that `llama-cpp-python` isn't installed and switches to lite —
-no config needed. Streamlit Cloud installs from `requirements.txt` (which has no
-model deps); the full `pyproject.toml` stack is only used locally.
+no config needed. Streamlit Cloud runs a base `uv sync` from `pyproject.toml`,
+and the local model is an **optional** dependency (`[project.optional-dependencies].local`),
+so the cloud install skips it. (Local dev gets it with `uv sync --extra local`.)
 
 1. **Push this repo to GitHub** (public is simplest for the free tier):
    ```bash
