@@ -18,7 +18,7 @@ from grocery import config
 from grocery.aggregate.combine import combine
 from grocery.ingest.web import IngestError
 from grocery.models import DEFAULT_CATEGORY, Ingredient
-from grocery.pipeline import process_url
+from grocery.pipeline import process_document, process_image, process_url
 
 
 @st.cache_resource(show_spinner=False)
@@ -49,10 +49,31 @@ def running_lite() -> bool:
     return type(get_extractor()).__name__ == "LiteExtractor"
 
 
+@st.cache_resource(show_spinner=False)
+def get_vision_extractor():
+    """Shared vision model for reading recipe photos. Lazy import (pulls the model
+    library) so it's only loaded when someone actually adds a photo."""
+    from grocery.extract.vision import VisionExtractor
+
+    return VisionExtractor()
+
+
 @st.cache_data(show_spinner=False)
 def run_pipeline(url: str, use_llm: bool):
     """Cached per (url, use_llm) so re-runs don't re-fetch or re-infer."""
     return process_url(url, get_extractor(), use_llm=use_llm)
+
+
+@st.cache_data(show_spinner=False)
+def run_image(image_bytes: bytes, name: str):
+    """Cached per image so re-building doesn't re-run slow vision inference."""
+    return process_image(image_bytes, name, get_vision_extractor())
+
+
+@st.cache_data(show_spinner=False)
+def run_document(file_bytes: bytes, filename: str, use_llm: bool):
+    """Cached per document so re-building doesn't re-read/re-infer."""
+    return process_document(file_bytes, filename, get_extractor(), use_llm=use_llm)
 
 
 def parse_urls(text: str) -> list[str]:
@@ -119,6 +140,44 @@ def editor_dataframe(items) -> pd.DataFrame:
     return df
 
 
+def grocery_csv(edited: pd.DataFrame, recipe_links: list[tuple[str, str]]) -> bytes:
+    """The current (edited) list as CSV, dropping the internal Review flag column.
+
+    Any recipe source links are appended as a second little table at the bottom.
+    """
+    body = edited.drop(columns=["Review"], errors="ignore").to_csv(index=False)
+    if recipe_links:
+        body += "\n" + pd.DataFrame(recipe_links, columns=["Recipe", "Link"]).to_csv(index=False)
+    return body.encode("utf-8")
+
+
+def grocery_text(edited: pd.DataFrame, recipe_links: list[tuple[str, str]]) -> str:
+    """The current (edited) list as a readable, aisle-grouped shopping list.
+
+    Recipe source links (for URL recipes) are listed at the bottom.
+    """
+    order = {category: i for i, category in enumerate(config.CATEGORIES)}
+    rows = [r for r in edited.to_dict("records") if str(r.get("Ingredient") or "").strip()]
+    rows.sort(key=lambda r: (order.get(r.get("Category"), len(order)), str(r["Ingredient"]).lower()))
+    lines = ["Grocery List"]
+    current_category = object()  # sentinel so the first real category prints a header
+    for row in rows:
+        category = row.get("Category") or "uncategorized"
+        if category != current_category:
+            lines += ["", category.upper()]
+            current_category = category
+        quantity = None if pd.isna(row.get("Quantity")) else row.get("Quantity")
+        amount = f"{_format_quantity(quantity)} {row.get('Unit') or ''}".strip()
+        item = f"{amount} {row['Ingredient']}".strip() if amount else str(row["Ingredient"])
+        if str(row.get("Notes") or "").strip():
+            item += f" ({row['Notes']})"
+        lines.append(f"  {'[x]' if row.get('Done') else '[ ]'} {item}")
+    if recipe_links:
+        lines += ["", "Recipes:"]
+        lines += [f"  - {name}: {url}" for name, url in recipe_links]
+    return "\n".join(lines)
+
+
 st.set_page_config(page_title="Grocery List Builder", page_icon="🛒")
 st.title("🛒 Grocery List Builder")
 st.caption("Paste one or more recipe links — I'll pull out the ingredients. Runs entirely on your machine.")
@@ -152,13 +211,97 @@ urls_text = st.text_area(
     help="New lines, commas, or spaces all work.",
 )
 
+# Photo input (needs the vision model, so only in full mode, not lite). Photos
+# accumulate in session state so the user can add several — camera_input is
+# single-shot, so each capture is appended via an "Add" button, which also resets
+# the widget (via a bumped key) for the next one. Camera access needs a secure
+# context — works on localhost; a deployed server would need HTTPS.
+IMAGE_LIMIT = 10
+
+if not running_lite():
+    st.session_state.setdefault("photos", [])  # list of (label, bytes)
+    st.session_state.setdefault("img_round", 0)  # bump to reset camera/uploader widgets
+    photos = st.session_state.photos
+
+    with st.expander(f"📷 Add recipes from photos (up to {IMAGE_LIMIT})"):
+        st.caption(
+            f"{len(photos)}/{IMAGE_LIMIT} added. Reading a photo runs a vision model on CPU, "
+            "so it's slow (~a minute each)."
+        )
+        if photos:
+            columns = st.columns(5)
+            for i, (label, data) in enumerate(photos):
+                columns[i % 5].image(data, caption=label, use_container_width=True)
+            if st.button("🗑️ Clear photos"):
+                st.session_state.photos = []
+                st.session_state.img_round += 1
+                st.rerun()
+
+        if len(photos) >= IMAGE_LIMIT:
+            st.info(f"Photo limit reached ({IMAGE_LIMIT}). Clear some to add more.")
+        else:
+            camera_tab, upload_tab = st.tabs(["📸 Take a photo", "📁 Upload"])
+            with camera_tab:
+                shot = st.camera_input("Camera", key=f"cam{st.session_state.img_round}", label_visibility="collapsed")
+                if st.button("➕ Add this photo", disabled=shot is None):
+                    photos.append((f"Photo {len(photos) + 1}", shot.getvalue()))
+                    st.session_state.img_round += 1
+                    st.rerun()
+            with upload_tab:
+                uploads = st.file_uploader(
+                    "Upload", type=["png", "jpg", "jpeg", "webp"],
+                    accept_multiple_files=True, key=f"up{st.session_state.img_round}",
+                    label_visibility="collapsed",
+                )
+                if st.button("➕ Add these", disabled=not uploads):
+                    for uploaded_file in uploads[: IMAGE_LIMIT - len(photos)]:
+                        photos.append((uploaded_file.name, uploaded_file.getvalue()))
+                    st.session_state.img_round += 1
+                    st.rerun()
+
+image_inputs = st.session_state.get("photos", [])
+
+# Document input (PDF / Word / text) — same accumulate-then-build pattern as
+# photos. Reading a document uses the text model, so full mode only.
+DOC_LIMIT = 10
+if not running_lite():
+    st.session_state.setdefault("docs", [])  # list of (filename, bytes)
+    st.session_state.setdefault("doc_round", 0)
+    docs = st.session_state.docs
+
+    with st.expander(f"📄 Add recipes from documents — PDF, Word, or text (up to {DOC_LIMIT})"):
+        st.caption(f"{len(docs)}/{DOC_LIMIT} added. Reads the text, then uses the model to pull out ingredients.")
+        if docs:
+            for position, (fname, _) in enumerate(docs, start=1):
+                st.write(f"{position}. {fname}")
+            if st.button("🗑️ Clear documents"):
+                st.session_state.docs = []
+                st.session_state.doc_round += 1
+                st.rerun()
+
+        if len(docs) >= DOC_LIMIT:
+            st.info(f"Document limit reached ({DOC_LIMIT}). Clear some to add more.")
+        else:
+            doc_uploads = st.file_uploader(
+                "Upload documents", type=["pdf", "txt", "md", "docx"],
+                accept_multiple_files=True, key=f"doc{st.session_state.doc_round}",
+                label_visibility="collapsed",
+            )
+            if st.button("➕ Add these documents", disabled=not doc_uploads):
+                for uploaded_file in doc_uploads[: DOC_LIMIT - len(docs)]:
+                    docs.append((uploaded_file.name, uploaded_file.getvalue()))
+                st.session_state.doc_round += 1
+                st.rerun()
+
+document_inputs = st.session_state.get("docs", [])
+
 # Build on click. The result is stashed as a seed DataFrame in session state; a
 # bumped `build_id` gives the editor a fresh key so a new build starts clean
 # (rather than the keyed widget replaying edits from the previous list).
 if st.button("Build list", type="primary"):
     urls = parse_urls(urls_text)
-    if not urls:
-        st.warning("Paste at least one recipe URL above (must start with http:// or https://).")
+    if not urls and not image_inputs and not document_inputs:
+        st.warning("Paste a recipe URL (http:// or https://), or add a photo or document, to build a list.")
 
     results = []  # (recipe_name, RecipeContent, ingredients) for each URL that succeeded
     for url in urls:
@@ -183,6 +326,32 @@ if st.button("Build list", type="primary"):
             continue
 
         results.append((content.title or url, content, ingredients))
+
+    # Recipe photos → the vision model reads each into ingredient lines.
+    for name, image_bytes in image_inputs:
+        with st.spinner(f"Reading {name} … (vision model on CPU — this can take ~a minute)"):
+            try:
+                content, ingredients = run_image(image_bytes, name)
+            except Exception as exc:  # noqa: BLE001 — surface anything else to the user
+                st.error(f"Couldn't read {name}: {exc}")
+                continue
+        if not ingredients:
+            st.warning(f"No ingredients read from {name} — try a clearer photo.")
+            continue
+        results.append((name, content, ingredients))
+
+    # Recipe documents → read text, then the model pulls ingredient lines.
+    for filename, file_bytes in document_inputs:
+        with st.spinner(f"Reading {filename} …"):
+            try:
+                content, ingredients = run_document(file_bytes, filename, use_llm)
+            except Exception as exc:  # noqa: BLE001 — surface anything else to the user
+                st.error(f"Couldn't read {filename}: {exc}")
+                continue
+        if not ingredients:
+            st.warning(f"No ingredients found in {filename} — it may not contain a recognizable recipe.")
+            continue
+        results.append((filename, content, ingredients))
 
     if results:
         grocery_list = combine([(name, ingredients) for name, _, ingredients in results])
@@ -217,6 +386,21 @@ if "editor_base" in st.session_state:
     total = len(edited)
     checked = int(edited["Done"].sum()) if total else 0
     st.progress(checked / total if total else 0.0, text=f"{checked} of {total} items checked")
+
+    recipe_links = [
+        (name, content.source_url)
+        for name, content, _ in st.session_state.get("recipe_results", [])
+        if content.source_url
+    ]
+    csv_col, txt_col = st.columns(2)
+    csv_col.download_button(
+        "⬇️ Download CSV", grocery_csv(edited, recipe_links), file_name="grocery_list.csv",
+        mime="text/csv", use_container_width=True,
+    )
+    txt_col.download_button(
+        "⬇️ Download text", grocery_text(edited, recipe_links), file_name="grocery_list.txt",
+        mime="text/plain", use_container_width=True,
+    )
     st.caption("⚠️ = flagged when built (low confidence, mixed units, or uncategorized).")
 
     with st.expander("Per-recipe breakdown"):

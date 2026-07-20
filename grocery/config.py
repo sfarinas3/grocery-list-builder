@@ -35,6 +35,20 @@ LLM_URL = f"https://modelscope.cn/models/{MODELSCOPE_REPO}/resolve/master/{LLM_F
 MODELS_DIR = Path(os.environ.get("GROCERY_MODELS_DIR", Path(__file__).resolve().parent.parent / "models"))
 LLM_PATH = MODELS_DIR / LLM_FILE
 
+# --- Vision model: recipe photos -> ingredients (docs/design.md, Approach B) ---
+# A multimodal GGUF (Qwen2.5-VL) + its image projector (mmproj), run via
+# llama-cpp-python's Qwen25VLChatHandler. Reads a photo and returns ingredient
+# lines, which then flow through the same parse/categorize/merge pipeline.
+# Both files download from ModelScope on first use (HF CDN is proxy-blocked).
+VISION_REPO = "ggml-org/Qwen2.5-VL-3B-Instruct-GGUF"
+VISION_FILE = "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"
+VISION_MMPROJ_FILE = "mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf"
+VISION_URL = f"https://modelscope.cn/models/{VISION_REPO}/resolve/master/{VISION_FILE}"
+VISION_MMPROJ_URL = f"https://modelscope.cn/models/{VISION_REPO}/resolve/master/{VISION_MMPROJ_FILE}"
+VISION_PATH = MODELS_DIR / VISION_FILE
+VISION_MMPROJ_PATH = MODELS_DIR / VISION_MMPROJ_FILE
+VISION_CONTEXT = 8192  # images consume many tokens; give the context room
+
 # Which extraction backend to use:
 #   "auto"  — use the local model if `llama-cpp-python` is installed, else lite
 #   "local" — require the local model (error if it isn't installed)
