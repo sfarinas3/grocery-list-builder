@@ -1,0 +1,4 @@
+<resources>
+    <!-- Manifest/launch theme only — actual UI theming happens in Compose (ui/theme/Theme.kt). -->
+    <style name="Theme.GroceryListBuilder" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

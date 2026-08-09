@@ -1,0 +1,394 @@
+{
+  "2 cups (500 ml) milk": {
+    "tokens": [
+      "2",
+      "cups",
+      "(",
+      "500",
+      "ml",
+      ")",
+      "milk"
+    ],
+    "tags": [
+      "CD",
+      "NNS",
+      "(",
+      "CD",
+      "NN",
+      ")",
+      "NN"
+    ]
+  },
+  "1-2 mashed bananas: as ripe as possible": {
+    "tokens": [
+      "1-2",
+      "mashed",
+      "bananas",
+      ":",
+      "as",
+      "ripe",
+      "as",
+      "possible"
+    ],
+    "tags": [
+      "JJ",
+      "VBN",
+      "NNS",
+      ":",
+      "RB",
+      "JJ",
+      "IN",
+      "JJ"
+    ]
+  },
+  "1.5 kg bananas, mashed": {
+    "tokens": [
+      "1.5",
+      "kg",
+      "bananas",
+      ",",
+      "mashed"
+    ],
+    "tags": [
+      "CD",
+      "NN",
+      "NNS",
+      ",",
+      "VBN"
+    ]
+  },
+  "Freshly grated Parmesan cheese, for garnish.": {
+    "tokens": [
+      "Freshly",
+      "grated",
+      "Parmesan",
+      "cheese",
+      ",",
+      "for",
+      "garnish",
+      "."
+    ],
+    "tags": [
+      "RB",
+      "VBN",
+      "NNP",
+      "NN",
+      ",",
+      "IN",
+      "NN",
+      "."
+    ]
+  },
+  "2 onions, finely chopped*": {
+    "tokens": [
+      "2",
+      "onions",
+      ",",
+      "finely",
+      "chopped",
+      "*"
+    ],
+    "tags": [
+      "CD",
+      "NNS",
+      ",",
+      "RB",
+      "VBN",
+      "NN"
+    ]
+  },
+  "2 cups beef and/or chicken stock": {
+    "tokens": [
+      "2",
+      "cups",
+      "beef",
+      "and/or",
+      "chicken",
+      "stock"
+    ],
+    "tags": [
+      "CD",
+      "NNS",
+      "NN",
+      "CC",
+      "NN",
+      "NN"
+    ]
+  },
+  "1 lb spaghetti ($0.98)": {
+    "tokens": [
+      "1",
+      "lb",
+      "spaghetti",
+      "(",
+      "$0.98",
+      ")"
+    ],
+    "tags": [
+      "CD",
+      "JJ",
+      "NN",
+      "(",
+      "NN",
+      ")"
+    ]
+  },
+  "1  bulb garlic (about 20 cloves, peeled and sliced thin, $0.70)": {
+    "tokens": [
+      "1",
+      "bulb",
+      "garlic",
+      "(",
+      "about",
+      "20",
+      "cloves",
+      ",",
+      "peeled",
+      "and",
+      "sliced",
+      "thin",
+      ",",
+      "$0.70",
+      ")"
+    ],
+    "tags": [
+      "CD",
+      "JJ",
+      "NN",
+      "(",
+      "RB",
+      "CD",
+      "NNS",
+      ",",
+      "VBN",
+      "CC",
+      "VBN",
+      "JJ",
+      ",",
+      "NNP",
+      ")"
+    ]
+  },
+  "¼ tsp freshly cracked black pepper ($0.05)": {
+    "tokens": [
+      "¼",
+      "tsp",
+      "freshly",
+      "cracked",
+      "black",
+      "pepper",
+      "(",
+      "$0.05",
+      ")"
+    ],
+    "tags": [
+      "JJ",
+      "NN",
+      "RB",
+      "VBN",
+      "JJ",
+      "NN",
+      "(",
+      "NN",
+      ")"
+    ]
+  },
+  "2 Tbsp lemon juice ($0.08)": {
+    "tokens": [
+      "2",
+      "Tbsp",
+      "lemon",
+      "juice",
+      "(",
+      "$0.08",
+      ")"
+    ],
+    "tags": [
+      "CD",
+      "NNP",
+      "NN",
+      "NN",
+      "(",
+      "NN",
+      ")"
+    ]
+  },
+  "1/2  bunch green onions ($0.35)": {
+    "tokens": [
+      "1",
+      "/",
+      "2",
+      "bunch",
+      "green",
+      "onions",
+      "(",
+      "$0.35",
+      ")"
+    ],
+    "tags": [
+      "CD",
+      "JJ",
+      "CD",
+      "NN",
+      "JJ",
+      "NNS",
+      "(",
+      "NN",
+      ")"
+    ]
+  },
+  "4 cloves garlic, minced": {
+    "tokens": [
+      "4",
+      "cloves",
+      "garlic",
+      ",",
+      "minced"
+    ],
+    "tags": [
+      "CD",
+      "NNS",
+      "NN",
+      ",",
+      "VBN"
+    ]
+  },
+  "1 (15 oz) can diced tomatoes": {
+    "tokens": [
+      "1",
+      "(",
+      "15",
+      "oz",
+      ")",
+      "can",
+      "diced",
+      "tomatoes"
+    ],
+    "tags": [
+      "CD",
+      "(",
+      "CD",
+      "NN",
+      ")",
+      "MD",
+      "VBN",
+      "NNS"
+    ]
+  },
+  "Salt and pepper, to taste": {
+    "tokens": [
+      "Salt",
+      "and",
+      "pepper",
+      ",",
+      "to",
+      "taste"
+    ],
+    "tags": [
+      "NN",
+      "CC",
+      "NN",
+      ",",
+      "TO",
+      "VB"
+    ]
+  },
+  "butter or olive oil": {
+    "tokens": [
+      "butter",
+      "or",
+      "olive",
+      "oil"
+    ],
+    "tags": [
+      "NN",
+      "CC",
+      "JJ",
+      "NN"
+    ]
+  },
+  "1 cup all-purpose flour, sifted": {
+    "tokens": [
+      "1",
+      "cup",
+      "all-purpose",
+      "flour",
+      ",",
+      "sifted"
+    ],
+    "tags": [
+      "CD",
+      "JJ",
+      "JJ",
+      "NN",
+      ",",
+      "VBN"
+    ]
+  },
+  "Preheat the oven to 350 degrees F.": {
+    "tokens": [
+      "Preheat",
+      "the",
+      "oven",
+      "to",
+      "350",
+      "degrees",
+      "F",
+      "."
+    ],
+    "tags": [
+      "VB",
+      "DT",
+      "NN",
+      "TO",
+      "CD",
+      "NNS",
+      "NNP",
+      "."
+    ]
+  },
+  "2019 vintage red wine": {
+    "tokens": [
+      "2019",
+      "vintage",
+      "red",
+      "wine"
+    ],
+    "tags": [
+      "CD",
+      "NN",
+      "JJ",
+      "NN"
+    ]
+  },
+  "a pinch of salt": {
+    "tokens": [
+      "a",
+      "pinch",
+      "of",
+      "salt"
+    ],
+    "tags": [
+      "DT",
+      "NN",
+      "IN",
+      "NN"
+    ]
+  },
+  "3-4 large eggs, beaten": {
+    "tokens": [
+      "3-4",
+      "large",
+      "eggs",
+      ",",
+      "beaten"
+    ],
+    "tags": [
+      "JJ",
+      "JJ",
+      "NNS",
+      ",",
+      "VBN"
+    ]
+  }
+}

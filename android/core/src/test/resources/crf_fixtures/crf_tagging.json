@@ -1,0 +1,920 @@
+{
+  "2 cups (500 ml) milk": {
+    "tokens": [
+      "2",
+      "cup",
+      "(",
+      "500",
+      "ml",
+      ")",
+      "milk"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "PUNC",
+      "QTY",
+      "UNIT",
+      "PUNC",
+      "B_NAME_TOK"
+    ],
+    "confidences": [
+      0.999995,
+      0.999193,
+      0.999991,
+      0.998347,
+      0.996102,
+      0.99999,
+      0.991133
+    ]
+  },
+  "1-2 mashed bananas: as ripe as possible": {
+    "tokens": [
+      "1-2",
+      "mashed",
+      "bananas",
+      ":",
+      "as",
+      "ripe",
+      "as",
+      "possible"
+    ],
+    "labels": [
+      "QTY",
+      "PREP",
+      "B_NAME_TOK",
+      "PUNC",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT"
+    ],
+    "confidences": [
+      0.992765,
+      0.979326,
+      0.985647,
+      0.999757,
+      0.995276,
+      0.996188,
+      0.99768,
+      0.996883
+    ]
+  },
+  "1.5 kg bananas, mashed": {
+    "tokens": [
+      "1.5",
+      "kg",
+      "bananas",
+      ",",
+      "mashed"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "PUNC",
+      "PREP"
+    ],
+    "confidences": [
+      0.999983,
+      0.988436,
+      0.997849,
+      0.999995,
+      0.997671
+    ]
+  },
+  "Freshly grated Parmesan cheese, for garnish.": {
+    "tokens": [
+      "Freshly",
+      "grated",
+      "Parmesan",
+      "cheese",
+      ",",
+      "for",
+      "garnish",
+      "."
+    ],
+    "labels": [
+      "PREP",
+      "PREP",
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "PUNC",
+      "PURPOSE",
+      "PURPOSE",
+      "PUNC"
+    ],
+    "confidences": [
+      0.999008,
+      0.999966,
+      0.9901,
+      0.996296,
+      0.999996,
+      0.999542,
+      0.999563,
+      0.989879
+    ]
+  },
+  "2 onions, finely chopped*": {
+    "tokens": [
+      "2",
+      "onions",
+      ",",
+      "finely",
+      "chopped",
+      "*"
+    ],
+    "labels": [
+      "QTY",
+      "B_NAME_TOK",
+      "PUNC",
+      "PREP",
+      "PREP",
+      "PUNC"
+    ],
+    "confidences": [
+      0.999861,
+      0.99897,
+      0.999998,
+      0.999431,
+      0.999458,
+      0.992562
+    ]
+  },
+  "2 cups beef and/or chicken stock": {
+    "tokens": [
+      "2",
+      "cup",
+      "beef",
+      "and/or",
+      "chicken",
+      "stock"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "NAME_SEP",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.999989,
+      0.99995,
+      0.788357,
+      0.889308,
+      0.611788,
+      0.710781
+    ]
+  },
+  "1 lb spaghetti ($0.98)": {
+    "tokens": [
+      "1",
+      "lb",
+      "spaghetti"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK"
+    ],
+    "confidences": [
+      0.999988,
+      0.997918,
+      0.999749
+    ]
+  },
+  "1  bulb garlic (about 20 cloves, peeled and sliced thin, $0.70)": {
+    "tokens": [
+      "1",
+      "bulb",
+      "garlic",
+      "(",
+      "about",
+      "20",
+      "clove",
+      ",",
+      "peeled",
+      "and",
+      "sliced",
+      "thin",
+      ",",
+      "$0.70",
+      ")"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "PUNC",
+      "COMMENT",
+      "QTY",
+      "UNIT",
+      "PUNC",
+      "PREP",
+      "PREP",
+      "PREP",
+      "PREP",
+      "PUNC",
+      "COMMENT",
+      "PUNC"
+    ],
+    "confidences": [
+      0.999978,
+      0.999879,
+      0.988911,
+      0.999983,
+      0.998885,
+      0.972347,
+      0.965472,
+      1.0,
+      0.998622,
+      0.998086,
+      0.99893,
+      0.996318,
+      0.999987,
+      0.911177,
+      0.999967
+    ]
+  },
+  "¼ tsp freshly cracked black pepper ($0.05)": {
+    "tokens": [
+      "#1$4",
+      "tsp",
+      "freshly",
+      "cracked",
+      "black",
+      "pepper"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "PREP",
+      "PREP",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.999978,
+      0.999509,
+      0.999917,
+      0.999977,
+      0.977797,
+      0.995206
+    ]
+  },
+  "2 Tbsp lemon juice ($0.08)": {
+    "tokens": [
+      "2",
+      "Tbsp",
+      "lemon",
+      "juice"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.999969,
+      0.999491,
+      0.998742,
+      0.998095
+    ]
+  },
+  "1/2  bunch green onions ($0.35)": {
+    "tokens": [
+      "#1$2",
+      "bunch",
+      "green",
+      "onions"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.99999,
+      0.999804,
+      0.997261,
+      0.997927
+    ]
+  },
+  "4 cloves garlic, minced": {
+    "tokens": [
+      "4",
+      "clove",
+      "garlic",
+      ",",
+      "minced"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "PUNC",
+      "PREP"
+    ],
+    "confidences": [
+      0.999977,
+      0.999377,
+      0.998742,
+      0.999997,
+      0.998407
+    ]
+  },
+  "1 (15 oz) can diced tomatoes": {
+    "tokens": [
+      "1",
+      "(",
+      "15",
+      "oz",
+      ")",
+      "can",
+      "diced",
+      "tomatoes"
+    ],
+    "labels": [
+      "QTY",
+      "PUNC",
+      "QTY",
+      "UNIT",
+      "PUNC",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.999755,
+      0.999979,
+      0.999884,
+      0.999857,
+      0.999897,
+      0.993202,
+      0.992207,
+      0.996184
+    ]
+  },
+  "Salt and pepper, to taste": {
+    "tokens": [
+      "Salt",
+      "and",
+      "pepper",
+      ",",
+      "to",
+      "taste"
+    ],
+    "labels": [
+      "B_NAME_TOK",
+      "NAME_SEP",
+      "B_NAME_TOK",
+      "PUNC",
+      "COMMENT",
+      "COMMENT"
+    ],
+    "confidences": [
+      0.999421,
+      0.988476,
+      0.97234,
+      0.999995,
+      0.998501,
+      0.99866
+    ]
+  },
+  "butter or olive oil": {
+    "tokens": [
+      "butter",
+      "or",
+      "olive",
+      "oil"
+    ],
+    "labels": [
+      "B_NAME_TOK",
+      "NAME_SEP",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.93257,
+      0.999703,
+      0.978777,
+      0.978615
+    ]
+  },
+  "1 cup all-purpose flour, sifted": {
+    "tokens": [
+      "1",
+      "cup",
+      "all-purpose",
+      "flour",
+      ",",
+      "sifted"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "PUNC",
+      "PREP"
+    ],
+    "confidences": [
+      0.999987,
+      0.99965,
+      0.99963,
+      0.999684,
+      0.999998,
+      0.999583
+    ]
+  },
+  "Preheat the oven to 350 degrees F.": {
+    "tokens": [
+      "Preheat",
+      "the",
+      "oven",
+      "to",
+      "350",
+      "degrees",
+      "F",
+      "."
+    ],
+    "labels": [
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "I_NAME_TOK",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "PUNC"
+    ],
+    "confidences": [
+      0.800075,
+      0.785038,
+      0.784419,
+      0.951881,
+      0.94464,
+      0.941233,
+      0.936444,
+      0.9998
+    ]
+  },
+  "2019 vintage red wine": {
+    "tokens": [
+      "2019",
+      "vintage",
+      "red",
+      "wine"
+    ],
+    "labels": [
+      "QTY",
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.99914,
+      0.979066,
+      0.979437,
+      0.999664
+    ]
+  },
+  "a pinch of salt": {
+    "tokens": [
+      "a",
+      "pinch",
+      "of",
+      "salt"
+    ],
+    "labels": [
+      "COMMENT",
+      "UNIT",
+      "COMMENT",
+      "B_NAME_TOK"
+    ],
+    "confidences": [
+      0.947229,
+      0.933391,
+      0.969304,
+      0.930502
+    ]
+  },
+  "3-4 large eggs, beaten": {
+    "tokens": [
+      "3-4",
+      "large",
+      "eggs",
+      ",",
+      "beaten"
+    ],
+    "labels": [
+      "QTY",
+      "SIZE",
+      "B_NAME_TOK",
+      "PUNC",
+      "PREP"
+    ],
+    "confidences": [
+      0.999826,
+      0.998377,
+      0.995026,
+      0.999997,
+      0.999186
+    ]
+  },
+  "1 28 ounce can crushed tomatoes": {
+    "tokens": [
+      "1",
+      "28",
+      "ounce",
+      "can",
+      "crushed",
+      "tomatoes"
+    ],
+    "labels": [
+      "QTY",
+      "QTY",
+      "UNIT",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.999981,
+      0.999342,
+      0.999996,
+      0.999264,
+      0.998896,
+      0.999027
+    ]
+  },
+  "15 ounce can black beans, drained and rinsed": {
+    "tokens": [
+      "15",
+      "ounce",
+      "can",
+      "black",
+      "beans",
+      ",",
+      "drained",
+      "and",
+      "rinsed"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "PUNC",
+      "PREP",
+      "PREP",
+      "PREP"
+    ],
+    "confidences": [
+      0.99997,
+      0.999984,
+      0.995498,
+      0.996036,
+      0.99839,
+      0.999997,
+      0.998788,
+      0.998635,
+      0.99879
+    ]
+  },
+  "2 inch piece fresh ginger, peeled and grated": {
+    "tokens": [
+      "2",
+      "inch",
+      "piece",
+      "fresh",
+      "ginger",
+      ",",
+      "peeled",
+      "and",
+      "grated"
+    ],
+    "labels": [
+      "SIZE",
+      "SIZE",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "PUNC",
+      "PREP",
+      "PREP",
+      "PREP"
+    ],
+    "confidences": [
+      0.793365,
+      0.808441,
+      0.987978,
+      0.99558,
+      0.995615,
+      0.999998,
+      0.999605,
+      0.999538,
+      0.999775
+    ]
+  },
+  "1 lb 2 oz beef mince": {
+    "tokens": [
+      "1",
+      "lb",
+      "2",
+      "oz",
+      "beef",
+      "mince"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.999997,
+      0.999956,
+      0.997348,
+      0.999696,
+      0.996814,
+      0.997274
+    ]
+  },
+  "2 cups plus 1 tablespoon sugar": {
+    "tokens": [
+      "2",
+      "cup",
+      "plus",
+      "1",
+      "tablespoon",
+      "sugar"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "COMMENT",
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK"
+    ],
+    "confidences": [
+      0.999977,
+      0.999622,
+      0.999782,
+      0.988472,
+      0.987924,
+      0.992211
+    ]
+  },
+  "butter, olive oil or vegetable oil": {
+    "tokens": [
+      "butter",
+      ",",
+      "olive",
+      "oil",
+      "or",
+      "vegetable",
+      "oil"
+    ],
+    "labels": [
+      "B_NAME_TOK",
+      "PUNC",
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "NAME_SEP",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.97676,
+      0.999986,
+      0.983028,
+      0.994734,
+      0.997391,
+      0.975018,
+      0.976607
+    ]
+  },
+  "1kg floury potatoes, such as King Edward or Maris Piper, peeled": {
+    "tokens": [
+      "1",
+      "kg",
+      "floury",
+      "potatoes",
+      ",",
+      "such",
+      "as",
+      "King",
+      "Edward",
+      "or",
+      "Maris",
+      "Piper",
+      ",",
+      "peeled"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "PUNC",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "PUNC",
+      "PREP"
+    ],
+    "confidences": [
+      0.999979,
+      0.990752,
+      0.996162,
+      0.99979,
+      0.999999,
+      0.999928,
+      0.999998,
+      0.999952,
+      0.999913,
+      0.999999,
+      0.999996,
+      0.999883,
+      0.999989,
+      0.986691
+    ]
+  },
+  "8 x 450g/1lb live lobsters": {
+    "tokens": [
+      "8x",
+      "450",
+      "g",
+      "/",
+      "1",
+      "lb",
+      "live",
+      "lobsters"
+    ],
+    "labels": [
+      "QTY",
+      "QTY",
+      "UNIT",
+      "PUNC",
+      "QTY",
+      "UNIT",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.999959,
+      0.999683,
+      0.999955,
+      0.999949,
+      0.999826,
+      0.998583,
+      0.997802,
+      0.999523
+    ]
+  },
+  "salt and freshly ground black pepper, to taste": {
+    "tokens": [
+      "salt",
+      "and",
+      "freshly",
+      "ground",
+      "black",
+      "pepper",
+      ",",
+      "to",
+      "taste"
+    ],
+    "labels": [
+      "B_NAME_TOK",
+      "NAME_SEP",
+      "PREP",
+      "PREP",
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "PUNC",
+      "COMMENT",
+      "COMMENT"
+    ],
+    "confidences": [
+      0.990069,
+      0.995772,
+      0.999667,
+      0.999883,
+      0.984315,
+      0.986372,
+      0.999997,
+      0.999227,
+      0.999314
+    ]
+  },
+  "1 tablespoon chopped fresh sage or 1 teaspoon dried sage": {
+    "tokens": [
+      "1",
+      "tablespoon",
+      "chopped",
+      "fresh",
+      "sage",
+      "or",
+      "1",
+      "teaspoon",
+      "dried",
+      "sage"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "PREP",
+      "B_NAME_TOK",
+      "I_NAME_TOK",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT",
+      "COMMENT"
+    ],
+    "confidences": [
+      0.999958,
+      0.999911,
+      0.999302,
+      0.996991,
+      0.997306,
+      0.999801,
+      0.999405,
+      0.999013,
+      0.997016,
+      0.99626
+    ]
+  },
+  "salt": {
+    "tokens": [
+      "salt"
+    ],
+    "labels": [
+      "B_NAME_TOK"
+    ],
+    "confidences": [
+      0.987893
+    ]
+  },
+  "2 large eggs": {
+    "tokens": [
+      "2",
+      "large",
+      "eggs"
+    ],
+    "labels": [
+      "QTY",
+      "SIZE",
+      "B_NAME_TOK"
+    ],
+    "confidences": [
+      0.999147,
+      0.996299,
+      0.998746
+    ]
+  },
+  "1/4 cup (60ml) heavy cream": {
+    "tokens": [
+      "#1$4",
+      "cup",
+      "(",
+      "60",
+      "ml",
+      ")",
+      "heavy",
+      "cream"
+    ],
+    "labels": [
+      "QTY",
+      "UNIT",
+      "PUNC",
+      "QTY",
+      "UNIT",
+      "PUNC",
+      "B_NAME_TOK",
+      "I_NAME_TOK"
+    ],
+    "confidences": [
+      0.999987,
+      0.999662,
+      0.999996,
+      0.998991,
+      0.996635,
+      0.999992,
+      0.9992,
+      0.999246
+    ]
+  }
+}
