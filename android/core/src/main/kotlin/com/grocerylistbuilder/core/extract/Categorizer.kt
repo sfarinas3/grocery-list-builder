@@ -18,8 +18,9 @@ object Categorizer {
 
     // The tweakable knob: which words map an ingredient to which aisle. Keywords are matched
     // whole-word and longest-first, so "black pepper" (spices) wins over "pepper", and "olive
-    // oil" (condiments) wins over "oil". Add staples freely — this table only needs to cover the
-    // common case; the LLM fallback and human review handle the rest.
+    // oil" (condiments) wins over "oil" — and tolerate a trailing "s"/"es" (see LOOKUP below), so
+    // "green onion" also matches the far more common "green onions". Add staples freely — this
+    // table only needs to cover the common case; human review handles the rest.
     private val CATEGORY_KEYWORDS: Map<String, List<String>> = mapOf(
         "produce" to listOf(
             "garlic", "onion", "scallion", "green onion", "shallot", "tomato", "lettuce",
@@ -50,6 +51,7 @@ object Categorizer {
             "oil", "olive oil", "vegetable oil", "sesame oil", "soy sauce", "vinegar",
             "ketchup", "mustard", "mayonnaise", "mayo", "honey", "oyster sauce",
             "hot sauce", "fish sauce", "worcestershire", "salsa", "syrup", "maple syrup",
+            "miso", "miso paste", "hoisin", "gochujang", "tahini",
         ),
         "spices & seasonings" to listOf(
             "salt", "pepper", "black pepper", "red pepper", "cumin", "paprika",
@@ -61,15 +63,19 @@ object Categorizer {
             "sugar", "brown sugar", "powdered sugar", "baking powder", "baking soda",
             "yeast", "vanilla", "cocoa", "chocolate", "chocolate chip", "cornstarch",
         ),
-        "beverages" to listOf("wine", "juice", "coffee", "tea", "beer"),
+        "beverages" to listOf("wine", "juice", "coffee", "tea", "beer", "sake"),
     )
 
     // Flattened to (compiled whole-word regex, category), longest keyword first so a more
-    // specific match wins.
+    // specific match wins. Each keyword's pattern tolerates an optional trailing "s"/"es" --
+    // ingredient names are overwhelmingly given in plural ("2 green onions", "3 tomatoes") while
+    // this table is written in singular for readability, and a bare `\bKEYWORD\b` doesn't match
+    // across that boundary (no word-break between "onion" and the "s" in "onions"). Doesn't cover
+    // irregular plurals (e.g. "leaf" -> "leaves"); add those as their own keyword entry if needed.
     private val LOOKUP: List<Pair<Regex, String>> = CATEGORY_KEYWORDS
         .flatMap { (category, keywords) -> keywords.map { it to category } }
         .sortedByDescending { it.first.length }
-        .map { (keyword, category) -> Regex("\\b${Regex.escape(keyword)}\\b", RegexOption.IGNORE_CASE) to category }
+        .map { (keyword, category) -> Regex("\\b${Regex.escape(keyword)}(?:es|s)?\\b", RegexOption.IGNORE_CASE) to category }
 
     /** Return the aisle for an ingredient name via the keyword table, or null. */
     fun lookupCategory(name: String): String? = LOOKUP.firstOrNull { (pattern, _) -> pattern.containsMatchIn(name) }?.second
@@ -103,8 +109,8 @@ object Categorizer {
             }
         }
 
-        // Anything still unassigned (lookup missed it and the LLM didn't place it) keeps the
-        // default sentinel — flag it for human review.
+        // Anything still unassigned (lookup missed it and no extractor placed it either) keeps
+        // the default sentinel — flag it for human review.
         for (i in unresolved) {
             if (result[i].category !in categories) {
                 result[i] = result[i].copy(flags = result[i].flags + "needs_category")

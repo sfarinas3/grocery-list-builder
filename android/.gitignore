@@ -8,3 +8,9 @@
 .externalNativeBuild
 .cxx
 */build
+
+# Release signing key — never committed. Generated once, stored outside the repo, and fed to CI
+# via GitHub Actions secrets (see .github/workflows/android-release.yml).
+*.keystore
+*.keystore.jks
+*.jks

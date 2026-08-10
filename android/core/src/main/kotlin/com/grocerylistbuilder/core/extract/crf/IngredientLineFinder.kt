@@ -48,7 +48,10 @@ object IngredientLineFinder {
         val candidates = findCandidateLines(text.trim())
         return candidates
             .map { IngredientLineParser.parseIngredientLine(it) }
-            .filter { "unparsed_name" !in it.flags && it.confidence >= MIN_CONFIDENCE }
+            .filter {
+                "unparsed_name" !in it.flags && it.confidence >= MIN_CONFIDENCE &&
+                    !GroceryNoiseFilter.isLikelyNoise(it.name)
+            }
     }
 
     fun findCandidateLines(text: String): List<String> {
@@ -59,14 +62,20 @@ object IngredientLineFinder {
             for (line in lines.drop(headingIdx + 1)) {
                 if (nextSectionPattern.matches(line)) break
                 if (line.isBlank()) continue
-                section.add(stripBullet(line).trim())
+                val stripped = stripBullet(line).trim()
+                // Heading-scoped extraction otherwise applies no per-line filtering (real
+                // ingredient lines like "salt to taste" have no quantity/unit to filter on) --
+                // this is the one check that still applies here, to screen out UI chrome a photo
+                // of a phone/website captured alongside the recipe (see GroceryNoiseFilter).
+                if (GroceryNoiseFilter.isLikelyNoise(stripped)) continue
+                section.add(stripped)
             }
             return section
         }
 
         return lines
             .map { stripBullet(it).trim() }
-            .filter { it.isNotEmpty() && isCandidateLine(it) }
+            .filter { it.isNotEmpty() && isCandidateLine(it) && !GroceryNoiseFilter.isLikelyNoise(it) }
     }
 
     private fun stripBullet(line: String): String = bulletPattern.replace(line, "")

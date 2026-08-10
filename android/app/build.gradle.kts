@@ -13,15 +13,36 @@ android {
         applicationId = "com.grocerylistbuilder.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0-phase2"
+        versionCode = 3
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Release signing reads from environment variables rather than a checked-in
+    // keystore/keystore.properties — the release key never lives in the repo. Locally these are
+    // unset, so a release build is just unsigned (fine for `assembleRelease` sanity checks on a
+    // dev machine); CI (see .github/workflows/android-release.yml) sets them from GitHub Actions
+    // secrets before building, so every published release is signed with the same key and can
+    // cleanly update over a previous install.
+    val releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+    signingConfigs {
+        if (releaseKeystorePath != null) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (releaseKeystorePath != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

@@ -23,6 +23,22 @@ class CategorizerTest {
     }
 
     @Test
+    fun `plural ingredient names match their singular keyword`() {
+        // A real false-"uncategorized" report: "green onion" (the keyword) didn't match "green
+        // onions" (how the ingredient is actually written) because a bare \bKEYWORD\b has no
+        // word-break between "onion" and the plural "s".
+        assertEquals("produce", Categorizer.lookupCategory("2 green onions, chopped"))
+        assertEquals("produce", Categorizer.lookupCategory("3 tomatoes, diced"))
+        assertEquals("produce", Categorizer.lookupCategory("2 carrots"))
+    }
+
+    @Test
+    fun `sake and miso are categorized`() {
+        assertEquals("beverages", Categorizer.lookupCategory("1 cup sake"))
+        assertEquals("condiments & sauces", Categorizer.lookupCategory("2 tbsp red awase miso paste"))
+    }
+
+    @Test
     fun `categorize resolves via keyword lookup with no extractor`() = runTest {
         val ingredients = listOf(Ingredient(name = "2 cloves garlic, minced"))
         val result = Categorizer.categorize(ingredients, Config.CATEGORIES, extractor = null)

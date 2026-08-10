@@ -90,6 +90,38 @@ class IngredientLineFinderTest {
     }
 
     @Test
+    fun `heading-scoped extraction rejects phone UI chrome captured alongside the recipe photo`() {
+        // Reproduces a real photo-OCR case: a status-bar weather widget and a search box ended
+        // up in the OCR text between "Ingredients:" and the next section heading, and were
+        // previously added to the list verbatim since heading-scoped extraction otherwise applies
+        // no per-line filtering (real ingredient lines like "salt to taste" have no quantity to
+        // filter on).
+        val text = """
+            Grandma's Chili
+
+            Partly Sunny
+            Q Search
+
+            Ingredients:
+            2 lbs ground beef
+            Partly Sunny
+            1 onion, chopped
+            Q Search
+            2 tbsp chili powder
+
+            Instructions:
+            Brown the beef.
+        """.trimIndent()
+
+        val lines = IngredientLineFinder.findCandidateLines(text)
+
+        assertEquals(
+            listOf("2 lbs ground beef", "1 onion, chopped", "2 tbsp chili powder"),
+            lines,
+        )
+    }
+
+    @Test
     fun `handles messy OCR text with no clear heading or formatting`() {
         val text = """
             Sarah's Famous Chili
