@@ -1,0 +1,54 @@
+warning: The `native-tls` setting is deprecated and will be removed in a future release. Use `system-certs` instead.
+2026-07-20 18:08:10.277 Uvicorn server started on :::8501
+2026-07-20 18:16:26.086 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-07-20 18:16:26.194 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-07-20 18:38:25.966 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-07-20 18:38:36.383 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+llama_context: n_ctx_seq (8192) < n_ctx_train (128000) -- the full capacity of the model will not be utilized
+add_text: <|im_start|>system
+You are a helpful assistant.<|im_end|>
+<|im_start|>user
+
+add_text: <|vision_start|>
+image_tokens->nx = 24
+image_tokens->ny = 13
+batch_f32 size = 1
+add_text: <|vision_end|>
+add_text: This image shows a recipe. Read it and return every ingredient line exactly as written, in the JSON object {"ingredient_lines": [...]}. Include only the ingredients — not the title, step instructions, or commentary.<|im_end|>
+<|im_start|>assistant
+encoding image slice...
+image slice encoded in 22549 ms
+decoding image batch 1/1, n_tokens_batch = 312
+image decoded (batch 1/1) in 8747 ms
+2026-07-20 18:42:20.852 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-07-20 18:42:20.928 Uncaught app execution
+Traceback (most recent call last):
+  File "C:\Users\sfari\OneDrive\Documents\GitHub\grocery-list-builder\.venv\Lib\site-packages\streamlit\runtime\scriptrunner\exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "C:\Users\sfari\OneDrive\Documents\GitHub\grocery-list-builder\.venv\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py", line 795, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\sfari\OneDrive\Documents\GitHub\grocery-list-builder\app.py", line 422, in <module>
+    if not (config.SMTP_HOST and config.SMTP_USER and config.SMTP_PASSWORD):
+            ^^^^^^^^^^^^^^^^
+AttributeError: module 'grocery.config' has no attribute 'SMTP_HOST'

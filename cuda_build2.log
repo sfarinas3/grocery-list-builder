@@ -1,0 +1,17 @@
+﻿cmd : 'vswhere.exe' is not recognized as an internal or external command,
+At line:6 char:1
++ cmd /c "`"$vsDevCmd`" -arch=x64 && set CMAKE_ARGS=-DGGML_CUDA=on -DCU ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ('vswhere.exe' i...ternal command,:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+operable program or batch file.
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.0
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+warning: The `native-tls` setting is deprecated and will be removed in a future release. Use `system-certs` instead.
+Resolved 6 packages in 6.93s
+   Building llama-cpp-python==0.3.19
+Downloading numpy (11.9MiB)
+ Downloaded numpy

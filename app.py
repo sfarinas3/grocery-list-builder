@@ -178,6 +178,21 @@ def grocery_text(edited: pd.DataFrame, recipe_links: list[tuple[str, str]]) -> s
     return "\n".join(lines)
 
 
+def send_email(to_addrs: list[str], body: str) -> None:
+    """Email the plain-text list to one or more recipients via config.SMTP_*."""
+    import smtplib
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(body)
+    msg["Subject"] = "Grocery List"
+    msg["From"] = config.SMTP_FROM
+    msg["To"] = ", ".join(to_addrs)
+    with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT) as server:
+        server.starttls()
+        server.login(config.SMTP_USER, config.SMTP_PASSWORD)
+        server.sendmail(config.SMTP_FROM, to_addrs, msg.as_string())
+
+
 st.set_page_config(page_title="Grocery List Builder", page_icon="🛒")
 st.title("🛒 Grocery List Builder")
 st.caption("Paste one or more recipe links — I'll pull out the ingredients. Runs entirely on your machine.")
@@ -402,6 +417,22 @@ if "editor_base" in st.session_state:
         mime="text/plain", use_container_width=True,
     )
     st.caption("⚠️ = flagged when built (low confidence, mixed units, or uncategorized).")
+
+    with st.expander("📧 Email this list"):
+        if not (config.SMTP_HOST and config.SMTP_USER and config.SMTP_PASSWORD):
+            st.caption(
+                "Not configured — set GROCERY_SMTP_HOST/PORT/USER/PASSWORD env vars "
+                "(see grocery/config.py) to enable sending."
+            )
+        else:
+            addrs_input = st.text_input("To (comma-separated for multiple)", key="email_addrs")
+            if st.button("Send", disabled=not addrs_input.strip()):
+                to_addrs = [a.strip() for a in addrs_input.split(",") if a.strip()]
+                try:
+                    send_email(to_addrs, grocery_text(edited, recipe_links))
+                    st.success(f"Sent to {', '.join(to_addrs)}")
+                except Exception as e:
+                    st.error(f"Failed to send: {e}")
 
     with st.expander("Per-recipe breakdown"):
         for name, content, ingredients in st.session_state.get("recipe_results", []):

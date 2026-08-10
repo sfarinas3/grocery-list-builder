@@ -109,3 +109,14 @@ EXCLUDE_FROM_LIST = {
     "tap water",
     "filtered water",
 }
+
+# --- Email export (app.py "Send email" button) ----------------------------
+# SMTP creds for emailing the built list to one or more addresses. Unset by
+# default — the button is disabled with a setup hint until these are provided.
+# For Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=you@gmail.com,
+# SMTP_PASSWORD=<16-char app password> (not your login password).
+SMTP_HOST = os.environ.get("GROCERY_SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("GROCERY_SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("GROCERY_SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("GROCERY_SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("GROCERY_SMTP_FROM", SMTP_USER)
