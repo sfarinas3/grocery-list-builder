@@ -23,57 +23,33 @@ from grocery.pipeline import process_document, process_image, process_url
 
 @st.cache_resource(show_spinner=False)
 def get_extractor():
-    """The shared extraction backend, chosen by `config.BACKEND`.
+    """The shared extraction backend — model-free (`extract/lite.py`).
 
-    Tries the local model unless BACKEND is "lite"; falls back to the model-free
-    `LiteExtractor` when `llama-cpp-python` isn't installed (e.g. on Streamlit
-    Cloud). Imports are lazy so the heavy model library is only touched when the
-    local backend is actually used.
+    A local-LLM backend still exists (`extract/local_llm.py`) but isn't wired
+    in here; it's parked for a possible future desktop build (see
+    docs/design.md).
     """
-    if config.BACKEND != "lite":
-        try:
-            from grocery.extract.local_llm import LocalLLMExtractor
-
-            return LocalLLMExtractor()
-        except ImportError:
-            if config.BACKEND == "local":
-                raise  # explicitly requested the model but it isn't installed
-
     from grocery.extract.lite import LiteExtractor
 
     return LiteExtractor()
 
 
-def running_lite() -> bool:
-    """True when the active backend is the model-free LiteExtractor."""
-    return type(get_extractor()).__name__ == "LiteExtractor"
-
-
-@st.cache_resource(show_spinner=False)
-def get_vision_extractor():
-    """Shared vision model for reading recipe photos. Lazy import (pulls the model
-    library) so it's only loaded when someone actually adds a photo."""
-    from grocery.extract.vision import VisionExtractor
-
-    return VisionExtractor()
-
-
 @st.cache_data(show_spinner=False)
-def run_pipeline(url: str, use_llm: bool):
-    """Cached per (url, use_llm) so re-runs don't re-fetch or re-infer."""
-    return process_url(url, get_extractor(), use_llm=use_llm)
+def run_pipeline(url: str):
+    """Cached per url so re-runs don't re-fetch."""
+    return process_url(url, get_extractor())
 
 
 @st.cache_data(show_spinner=False)
 def run_image(image_bytes: bytes, name: str):
-    """Cached per image so re-building doesn't re-run slow vision inference."""
-    return process_image(image_bytes, name, get_vision_extractor())
+    """Cached per image so re-building doesn't re-run OCR."""
+    return process_image(image_bytes, name, get_extractor())
 
 
 @st.cache_data(show_spinner=False)
-def run_document(file_bytes: bytes, filename: str, use_llm: bool):
-    """Cached per document so re-building doesn't re-read/re-infer."""
-    return process_document(file_bytes, filename, get_extractor(), use_llm=use_llm)
+def run_document(file_bytes: bytes, filename: str):
+    """Cached per document so re-building doesn't re-read."""
+    return process_document(file_bytes, filename, get_extractor())
 
 
 def parse_urls(text: str) -> list[str]:
@@ -197,24 +173,6 @@ st.set_page_config(page_title="Grocery List Builder", page_icon="🛒")
 st.title("🛒 Grocery List Builder")
 st.caption("Paste one or more recipe links — I'll pull out the ingredients. Runs entirely on your machine.")
 
-with st.sidebar:
-    st.header("Settings")
-    if running_lite():
-        use_llm = False
-        st.info(
-            "**Lite mode** — no local model. Recipes with structured data work fully; "
-            "pages without it can't be auto-extracted here, and unusual ingredients "
-            "are categorized by lookup only. Run locally for full extraction."
-        )
-    else:
-        use_llm = st.checkbox(
-            "Use the local AI model for unknown categories",
-            value=True,
-            help="The model is also required for pages that lack structured recipe data. "
-            "The first time it runs, it loads the model (~30s on this machine).",
-        )
-        st.caption(f"Model: `{config.LLM_FILE}`")
-
 urls_text = st.text_area(
     "Recipe URLs",
     height=140,
@@ -226,87 +184,81 @@ urls_text = st.text_area(
     help="New lines, commas, or spaces all work.",
 )
 
-# Photo input (needs the vision model, so only in full mode, not lite). Photos
-# accumulate in session state so the user can add several — camera_input is
-# single-shot, so each capture is appended via an "Add" button, which also resets
-# the widget (via a bumped key) for the next one. Camera access needs a secure
-# context — works on localhost; a deployed server would need HTTPS.
+# Photo input. Photos accumulate in session state so the user can add several —
+# camera_input is single-shot, so each capture is appended via an "Add" button,
+# which also resets the widget (via a bumped key) for the next one. Camera
+# access needs a secure context — works on localhost; a deployed server would
+# need HTTPS.
 IMAGE_LIMIT = 10
 
-if not running_lite():
-    st.session_state.setdefault("photos", [])  # list of (label, bytes)
-    st.session_state.setdefault("img_round", 0)  # bump to reset camera/uploader widgets
-    photos = st.session_state.photos
+st.session_state.setdefault("photos", [])  # list of (label, bytes)
+st.session_state.setdefault("img_round", 0)  # bump to reset camera/uploader widgets
+photos = st.session_state.photos
 
-    with st.expander(f"📷 Add recipes from photos (up to {IMAGE_LIMIT})"):
-        st.caption(
-            f"{len(photos)}/{IMAGE_LIMIT} added. Reading a photo runs a vision model on CPU, "
-            "so it's slow (~a minute each)."
-        )
-        if photos:
-            columns = st.columns(5)
-            for i, (label, data) in enumerate(photos):
-                columns[i % 5].image(data, caption=label, use_container_width=True)
-            if st.button("🗑️ Clear photos"):
-                st.session_state.photos = []
+with st.expander(f"📷 Add recipes from photos (up to {IMAGE_LIMIT})"):
+    st.caption(f"{len(photos)}/{IMAGE_LIMIT} added. Reads the photo with OCR, then finds the ingredient lines.")
+    if photos:
+        columns = st.columns(5)
+        for i, (label, data) in enumerate(photos):
+            columns[i % 5].image(data, caption=label, use_container_width=True)
+        if st.button("🗑️ Clear photos"):
+            st.session_state.photos = []
+            st.session_state.img_round += 1
+            st.rerun()
+
+    if len(photos) >= IMAGE_LIMIT:
+        st.info(f"Photo limit reached ({IMAGE_LIMIT}). Clear some to add more.")
+    else:
+        camera_tab, upload_tab = st.tabs(["📸 Take a photo", "📁 Upload"])
+        with camera_tab:
+            shot = st.camera_input("Camera", key=f"cam{st.session_state.img_round}", label_visibility="collapsed")
+            if st.button("➕ Add this photo", disabled=shot is None):
+                photos.append((f"Photo {len(photos) + 1}", shot.getvalue()))
+                st.session_state.img_round += 1
+                st.rerun()
+        with upload_tab:
+            uploads = st.file_uploader(
+                "Upload", type=["png", "jpg", "jpeg", "webp"],
+                accept_multiple_files=True, key=f"up{st.session_state.img_round}",
+                label_visibility="collapsed",
+            )
+            if st.button("➕ Add these", disabled=not uploads):
+                for uploaded_file in uploads[: IMAGE_LIMIT - len(photos)]:
+                    photos.append((uploaded_file.name, uploaded_file.getvalue()))
                 st.session_state.img_round += 1
                 st.rerun()
 
-        if len(photos) >= IMAGE_LIMIT:
-            st.info(f"Photo limit reached ({IMAGE_LIMIT}). Clear some to add more.")
-        else:
-            camera_tab, upload_tab = st.tabs(["📸 Take a photo", "📁 Upload"])
-            with camera_tab:
-                shot = st.camera_input("Camera", key=f"cam{st.session_state.img_round}", label_visibility="collapsed")
-                if st.button("➕ Add this photo", disabled=shot is None):
-                    photos.append((f"Photo {len(photos) + 1}", shot.getvalue()))
-                    st.session_state.img_round += 1
-                    st.rerun()
-            with upload_tab:
-                uploads = st.file_uploader(
-                    "Upload", type=["png", "jpg", "jpeg", "webp"],
-                    accept_multiple_files=True, key=f"up{st.session_state.img_round}",
-                    label_visibility="collapsed",
-                )
-                if st.button("➕ Add these", disabled=not uploads):
-                    for uploaded_file in uploads[: IMAGE_LIMIT - len(photos)]:
-                        photos.append((uploaded_file.name, uploaded_file.getvalue()))
-                    st.session_state.img_round += 1
-                    st.rerun()
-
 image_inputs = st.session_state.get("photos", [])
 
-# Document input (PDF / Word / text) — same accumulate-then-build pattern as
-# photos. Reading a document uses the text model, so full mode only.
+# Document input (PDF / Word / text) — same accumulate-then-build pattern as photos.
 DOC_LIMIT = 10
-if not running_lite():
-    st.session_state.setdefault("docs", [])  # list of (filename, bytes)
-    st.session_state.setdefault("doc_round", 0)
-    docs = st.session_state.docs
+st.session_state.setdefault("docs", [])  # list of (filename, bytes)
+st.session_state.setdefault("doc_round", 0)
+docs = st.session_state.docs
 
-    with st.expander(f"📄 Add recipes from documents — PDF, Word, or text (up to {DOC_LIMIT})"):
-        st.caption(f"{len(docs)}/{DOC_LIMIT} added. Reads the text, then uses the model to pull out ingredients.")
-        if docs:
-            for position, (fname, _) in enumerate(docs, start=1):
-                st.write(f"{position}. {fname}")
-            if st.button("🗑️ Clear documents"):
-                st.session_state.docs = []
-                st.session_state.doc_round += 1
-                st.rerun()
+with st.expander(f"📄 Add recipes from documents — PDF, Word, or text (up to {DOC_LIMIT})"):
+    st.caption(f"{len(docs)}/{DOC_LIMIT} added. Reads the text, then finds the ingredient lines.")
+    if docs:
+        for position, (fname, _) in enumerate(docs, start=1):
+            st.write(f"{position}. {fname}")
+        if st.button("🗑️ Clear documents"):
+            st.session_state.docs = []
+            st.session_state.doc_round += 1
+            st.rerun()
 
-        if len(docs) >= DOC_LIMIT:
-            st.info(f"Document limit reached ({DOC_LIMIT}). Clear some to add more.")
-        else:
-            doc_uploads = st.file_uploader(
-                "Upload documents", type=["pdf", "txt", "md", "docx"],
-                accept_multiple_files=True, key=f"doc{st.session_state.doc_round}",
-                label_visibility="collapsed",
-            )
-            if st.button("➕ Add these documents", disabled=not doc_uploads):
-                for uploaded_file in doc_uploads[: DOC_LIMIT - len(docs)]:
-                    docs.append((uploaded_file.name, uploaded_file.getvalue()))
-                st.session_state.doc_round += 1
-                st.rerun()
+    if len(docs) >= DOC_LIMIT:
+        st.info(f"Document limit reached ({DOC_LIMIT}). Clear some to add more.")
+    else:
+        doc_uploads = st.file_uploader(
+            "Upload documents", type=["pdf", "txt", "md", "docx"],
+            accept_multiple_files=True, key=f"doc{st.session_state.doc_round}",
+            label_visibility="collapsed",
+        )
+        if st.button("➕ Add these documents", disabled=not doc_uploads):
+            for uploaded_file in doc_uploads[: DOC_LIMIT - len(docs)]:
+                docs.append((uploaded_file.name, uploaded_file.getvalue()))
+            st.session_state.doc_round += 1
+            st.rerun()
 
 document_inputs = st.session_state.get("docs", [])
 
@@ -322,7 +274,7 @@ if st.button("Build list", type="primary"):
     for url in urls:
         with st.spinner(f"Processing {url} …"):
             try:
-                content, ingredients = run_pipeline(url, use_llm)
+                content, ingredients = run_pipeline(url)
             except IngestError as exc:
                 st.error(str(exc))
                 continue
@@ -331,20 +283,14 @@ if st.button("Build list", type="primary"):
                 continue
 
         if not ingredients:
-            if running_lite():
-                st.warning(
-                    f"No structured recipe data at {url}, and the AI model isn't available "
-                    "in lite mode — skipped. Try a site with a structured recipe, or run locally."
-                )
-            else:
-                st.warning(f"No ingredients found for {url} — the page may be unsupported.")
+            st.warning(f"No ingredients found for {url} — the page may be unsupported.")
             continue
 
         results.append((content.title or url, content, ingredients))
 
-    # Recipe photos → the vision model reads each into ingredient lines.
+    # Recipe photos → OCR reads each into text, then the heuristic finds the lines.
     for name, image_bytes in image_inputs:
-        with st.spinner(f"Reading {name} … (vision model on CPU — this can take ~a minute)"):
+        with st.spinner(f"Reading {name} …"):
             try:
                 content, ingredients = run_image(image_bytes, name)
             except Exception as exc:  # noqa: BLE001 — surface anything else to the user
@@ -355,11 +301,11 @@ if st.button("Build list", type="primary"):
             continue
         results.append((name, content, ingredients))
 
-    # Recipe documents → read text, then the model pulls ingredient lines.
+    # Recipe documents → read text, then the heuristic finds the ingredient lines.
     for filename, file_bytes in document_inputs:
         with st.spinner(f"Reading {filename} …"):
             try:
-                content, ingredients = run_document(file_bytes, filename, use_llm)
+                content, ingredients = run_document(file_bytes, filename)
             except Exception as exc:  # noqa: BLE001 — surface anything else to the user
                 st.error(f"Couldn't read {filename}: {exc}")
                 continue
@@ -437,7 +383,7 @@ if "editor_base" in st.session_state:
     with st.expander("Per-recipe breakdown"):
         for name, content, ingredients in st.session_state.get("recipe_results", []):
             st.subheader(name)
-            source = "structured recipe data" if content.ingredient_lines else "AI-extracted from page text"
+            source = "structured recipe data" if content.ingredient_lines else "extracted from page text"
             bits = [f"{len(ingredients)} ingredients", source]
             if content.servings:
                 bits.insert(0, f"serves {content.servings}")

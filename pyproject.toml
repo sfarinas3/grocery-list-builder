@@ -3,12 +3,13 @@
 [project]
 name = "grocery-list-builder-bot"
 version = "0.1.0"
-description = "Turn recipe web links into a consolidated, editable grocery list using an LLM."
+description = "Turn recipe web links, documents, or photos into a consolidated, editable grocery list — no LLM required."
 readme = "README.md"
 requires-python = ">=3.12"
 
-# Base runtime dependencies — everything the LITE (model-free) app needs. This is
-# what a plain `uv sync` and low-RAM hosts (Streamlit Community Cloud) install.
+# Base runtime dependencies — everything the app needs. No model of any kind:
+# ingredient-parser-nlp is a small trained CRF (not an LLM), and line-finding /
+# OCR are both plain deterministic code (extract/heuristic.py, extract/ocr.py).
 dependencies = [
     "httpx>=0.27",           # fetch recipe web pages
     "truststore>=0.10",      # make httpx/downloads trust the OS cert store (corporate TLS proxy)
@@ -17,16 +18,20 @@ dependencies = [
     "pydantic>=2.9",         # the shared data contract in models.py (validation for free)
     "streamlit>=1.39",       # the on-screen UI (app.py)
     "pandas>=2.0",           # the editable list table (app.py)
+    "pypdf>=5.0",             # extract text from uploaded PDF recipes
+    "python-docx>=1.1",       # extract text from uploaded Word (.docx) recipes
+    "pytesseract>=0.3",       # OCR recipe photos (extract/ocr.py) — no model; needs the
+                               # tesseract-ocr system binary installed separately, see README.md
+    "Pillow>=10.0",           # image handling for OCR
 ]
 
-# The local LLM is OPTIONAL — installed only for full local runs, never on hosts
-# that can't run it. Install it with:  uv sync --extra local
-# (Streamlit Cloud does a base `uv sync`, so it skips this and runs lite mode.)
+# A local LLM backend (extract/local_llm.py, extract/vision.py) still exists in
+# the codebase but isn't wired into app.py — parked for a possible future
+# desktop build with real LLM hardware headroom. This extra is only needed to
+# run `eval/run.py` or experiment with those modules directly.
 [project.optional-dependencies]
 local = [
     "llama-cpp-python==0.3.19",  # local GGUF model on CPU (pinned: prebuilt AVX2 wheel; newer wheels use AVX512 this CPU lacks)
-    "pypdf>=5.0",                # extract text from uploaded PDF recipes
-    "python-docx>=1.1",          # extract text from uploaded Word (.docx) recipes
 ]
 
 # Development-only tools (installed with `uv sync`, not shipped).

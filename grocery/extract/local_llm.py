@@ -1,4 +1,12 @@
-"""Local GGUF model backend for extracting ingredient lines (docs/design.md §3.3).
+"""Local GGUF model backend for extracting ingredient lines.
+
+**Not currently wired into the Streamlit app** — `app.py` uses the model-free
+`LiteExtractor` (`extract/lite.py`) exclusively, whose heuristic line-finder
+(`extract/heuristic.py`) now does the "find the lines" job this module used to
+do. Kept, and still exercised by `eval/run.py`, because a real local LLM may
+be worth revisiting for a future desktop build (heavier hardware budget than a
+phone/free-tier host) — see docs/design.md. Install its dependency with
+`uv sync --extra local`.
 
 Its job is narrow: when a page has no JSON-LD, read the readable text and pull
 out the ingredient lines. The hard structured parse is still the CRF's job

@@ -1,5 +1,11 @@
 """Recipe photo -> ingredient lines, via a local vision model (Approach B).
 
+**Not currently wired into the Streamlit app** — `app.py` reads photos with
+plain OCR (`extract/ocr.py`, no model) and feeds the text through the same
+heuristic line-finder as any other raw text. Kept for a possible future
+desktop build where a real vision model is worth its weight — see
+docs/design.md. Install its dependency with `uv sync --extra local`.
+
 Uses Qwen2.5-VL (a multimodal GGUF) through llama-cpp-python's Qwen25VLChatHandler:
 the model reads the image and returns ingredient lines as grammar-constrained
 JSON, which then flow into the same parse -> categorize -> merge pipeline as a

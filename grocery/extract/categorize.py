@@ -1,10 +1,10 @@
 """Assign each ingredient a shopping aisle (docs/design.md §3.3).
 
-Two tiers, cheapest first:
-  1. A keyword lookup (below) — free, instant, no model. Covers the common case.
-  2. Optional LLM fallback for whatever the lookup misses, in one batched call,
-     constrained to the valid categories. Only runs if an `Extractor` is passed,
-     so categorization still works with no model at all (the JSON-LD path).
+A keyword lookup (below) — free, instant, no model — handles the common case.
+`categorize()` also accepts an `Extractor` for a model-backed fallback on
+whatever the lookup misses (a hook `local_llm.py`'s dormant backend uses, see
+docs/design.md §3.3); the live `LiteExtractor` implements that hook as a
+no-op, so categorization is lookup-only in the app today.
 
 Anything still unassigned keeps `DEFAULT_CATEGORY` and gets a "needs_category"
 flag so the UI surfaces it for review (Quality Check #3).
@@ -74,10 +74,16 @@ _LOOKUP: list[tuple[str, str]] = sorted(
 
 
 def lookup_category(name: str) -> str | None:
-    """Return the aisle for an ingredient name via the keyword table, or None."""
+    """Return the aisle for an ingredient name via the keyword table, or None.
+
+    Tolerates a trailing "s"/"es" on the keyword so plurals match too (e.g.
+    "green onions" still matches the "green onion" keyword, "beans" matches
+    "bean") — a bare `\\bkeyword\\b` fails on these since there's no word
+    boundary between the keyword and a trailing plural suffix.
+    """
     text = name.lower()
     for keyword, category in _LOOKUP:
-        if re.search(rf"\b{re.escape(keyword)}\b", text):
+        if re.search(rf"\b{re.escape(keyword)}(?:es|s)?\b", text):
             return category
     return None
 
@@ -85,9 +91,10 @@ def lookup_category(name: str) -> str | None:
 def categorize(ingredients: list[Ingredient], *, extractor: Extractor | None = None) -> list[Ingredient]:
     """Set `category` on each ingredient in place, then return the list.
 
-    Lookup handles the common case for free. If `extractor` is given, the
-    leftovers are categorized in one batched, category-constrained LLM call;
-    otherwise (or if the LLM still can't place one) they're flagged for review.
+    Lookup handles the common case for free. Leftovers go to
+    `extractor.categorize()` — a no-op for the live `LiteExtractor`, so they
+    just get flagged for review; a model-backed `Extractor` could place more
+    of them here instead.
     """
     unresolved: list[Ingredient] = []
     for ing in ingredients:

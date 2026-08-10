@@ -4,7 +4,7 @@ This is the accuracy-critical step (docs/design.md §3.2). It delegates the hard
 "2 cloves garlic, minced" -> fields split to `ingredient-parser`, a trained CRF
 model purpose-built for ingredient phrases — far more reliable at this than a
 small general LLM. Category is deliberately left unset here; assigning shopping
-aisles is a separate step (docs/design.md §3.3 / build step 5).
+aisles is a separate step (docs/design.md §3.3 / build step 4).
 
 Note: `ingredient_parser` downloads a small NLTK data file on first use, and
 loading the CRF model makes the first `parse_line` call slower than later ones.

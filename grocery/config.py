@@ -16,16 +16,18 @@ import truststore
 truststore.inject_into_ssl()
 
 
-# --- Local LLM (docs/design.md §3.3) --------------------------------------
+# --- Local LLM (dormant — see extract/local_llm.py, extract/vision.py) ----
+# The app (app.py) doesn't use a model at all — extraction is a heuristic
+# (extract/heuristic.py) plus the CRF parser, and photos go through local OCR
+# (extract/ocr.py). These settings only matter if you opt into `uv sync
+# --extra local` to run `eval/run.py` or experiment with `local_llm.py`/
+# `vision.py` directly — parked here for a possible future desktop build with
+# real LLM hardware headroom (see docs/design.md).
+#
 # Weights live in models/ (gitignored), downloaded once on first run. We fetch
 # from ModelScope rather than Hugging Face because the corporate Zscaler proxy
-# blocks HF's and Ollama's model CDNs (see docs/design.md §6) — ModelScope's CDN
-# is reachable, and it hosts the Qwen models first-party.
-#
-# To try a different model, change these two lines (repo, file) — nothing else
-# in the code changes. They can also be overridden by env vars so a deployment
-# (e.g. the Hugging Face Space) can pick a smaller/faster model without touching
-# the code; locally, the defaults below are used.
+# blocks HF's and Ollama's model CDNs — ModelScope's CDN is reachable, and it
+# hosts the Qwen models first-party.
 MODELSCOPE_REPO = os.environ.get("GROCERY_LLM_REPO", "Qwen/Qwen2.5-7B-Instruct-GGUF")
 LLM_FILE = os.environ.get("GROCERY_LLM_FILE", "qwen2.5-7b-instruct-q4_k_m.gguf")
 LLM_URL = f"https://modelscope.cn/models/{MODELSCOPE_REPO}/resolve/master/{LLM_FILE}"
@@ -35,11 +37,11 @@ LLM_URL = f"https://modelscope.cn/models/{MODELSCOPE_REPO}/resolve/master/{LLM_F
 MODELS_DIR = Path(os.environ.get("GROCERY_MODELS_DIR", Path(__file__).resolve().parent.parent / "models"))
 LLM_PATH = MODELS_DIR / LLM_FILE
 
-# --- Vision model: recipe photos -> ingredients (docs/design.md, Approach B) ---
+# --- Vision model (dormant — see extract/vision.py) ------------------------
 # A multimodal GGUF (Qwen2.5-VL) + its image projector (mmproj), run via
-# llama-cpp-python's Qwen25VLChatHandler. Reads a photo and returns ingredient
-# lines, which then flow through the same parse/categorize/merge pipeline.
-# Both files download from ModelScope on first use (HF CDN is proxy-blocked).
+# llama-cpp-python's Qwen25VLChatHandler. Not used by app.py (which OCRs
+# photos instead, see extract/ocr.py); kept for the same possible future
+# desktop build as the local LLM above.
 VISION_REPO = "ggml-org/Qwen2.5-VL-3B-Instruct-GGUF"
 VISION_FILE = "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"
 VISION_MMPROJ_FILE = "mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf"
@@ -49,16 +51,9 @@ VISION_PATH = MODELS_DIR / VISION_FILE
 VISION_MMPROJ_PATH = MODELS_DIR / VISION_MMPROJ_FILE
 VISION_CONTEXT = 8192  # images consume many tokens; give the context room
 
-# Which extraction backend to use:
-#   "auto"  — use the local model if `llama-cpp-python` is installed, else lite
-#   "local" — require the local model (error if it isn't installed)
-#   "lite"  — model-free (JSON-LD + lookup only); for low-RAM hosts like the
-#             free Streamlit Community Cloud tier
-BACKEND = os.environ.get("GROCERY_BACKEND", "auto")
-
 # Context window. Recipes are short; a modest window keeps CPU inference quick.
 LLM_CONTEXT = 8192
-# Cap on the readable text we feed the model (chars). Guards against a giant
+# Cap on the readable text fed to the model (chars). Guards against a giant
 # page overflowing the context; trafilatura's main-content extract is usually
 # well under this.
 LLM_MAX_INPUT_CHARS = 16000

@@ -1,8 +1,11 @@
 """Download the local GGUF model from ModelScope.
 
+Only used by the dormant `local_llm.py`/`vision.py` backends (docs/design.md
+§3.3) — not exercised by the live app.
+
 Split out from the model code because it's a one-time, slow, resumable network
 op. Hugging Face's and Ollama's CDNs are blocked by the corporate proxy; the
-ModelScope CDN is reachable (see docs/design.md §6), and it serves the Qwen
+ModelScope CDN is reachable (see docs/design.md §8), and it serves the Qwen
 GGUFs directly over HTTPS — so a plain streaming httpx download is all we need.
 """
 
