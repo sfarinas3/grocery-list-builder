@@ -1,8 +1,11 @@
 # Virtual environment (recreate with `uv sync`)
 .venv/
 
-# Downloaded GGUF model weights (fetched from ModelScope on first run)
-models/
+# Downloaded GGUF model weights (fetched from ModelScope on first run).
+# Anchored to the repo root (leading slash) -- an unanchored "models/" also matched
+# android/core/.../models/ (the Kotlin data-model package) anywhere in the tree, which
+# silently kept those source files out of every commit since they were created.
+/models/
 
 # Secrets — never commit real API keys
 .env
