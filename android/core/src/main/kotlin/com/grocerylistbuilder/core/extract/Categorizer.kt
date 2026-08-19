@@ -103,7 +103,7 @@ object Categorizer {
             val mapping = extractor.categorize(names, categories)
             for (i in unresolved) {
                 val category = mapping[result[i].name]
-                if (category != null && category in categories) {
+                if (category != null && categories.any { it == category }) {
                     result[i] = result[i].copy(category = category)
                 }
             }
@@ -112,7 +112,7 @@ object Categorizer {
         // Anything still unassigned (lookup missed it and no extractor placed it either) keeps
         // the default sentinel — flag it for human review.
         for (i in unresolved) {
-            if (result[i].category !in categories) {
+            if (categories.none { it == result[i].category }) {
                 result[i] = result[i].copy(flags = result[i].flags + "needs_category")
             }
         }

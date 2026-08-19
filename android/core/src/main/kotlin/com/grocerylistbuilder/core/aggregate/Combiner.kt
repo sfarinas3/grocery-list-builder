@@ -144,7 +144,7 @@ object Combiner {
                 flagged = flag(flagged, "absurd_quantity")
             }
         }
-        if (item.category !in Config.CATEGORIES) flagged = flag(flagged, "needs_category")
+        if (Config.CATEGORIES.none { it == item.category }) flagged = flag(flagged, "needs_category")
         flagged
     }
 
