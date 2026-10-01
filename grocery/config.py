@@ -16,55 +16,41 @@ import truststore
 truststore.inject_into_ssl()
 
 
-# --- Local LLM (dormant — see extract/local_llm.py, extract/vision.py) ----
-# The app (app.py) doesn't use a model at all — extraction is a heuristic
-# (extract/heuristic.py) plus the CRF parser, and photos go through local OCR
-# (extract/ocr.py). These settings only matter if you opt into `uv sync
-# --extra local` to run `eval/run.py` or experiment with `local_llm.py`/
-# `vision.py` directly — parked here for a possible future desktop build with
-# real LLM hardware headroom (see docs/design.md).
+# --- Local LLM (extract/llm.py) --------------------------------------------
+# A small instruct model, run on CPU through llama-cpp-python. Qwen3-4B was
+# picked over Qwen2.5-3B on the eval set (eval/run.py): about the same speed
+# with the LLM-for-unknowns-only design, but more precise — the 3B model
+# leaked the prompt's worked examples into lists as phantom items. ~2.5 GB.
+# To try another model, e.g. the 3B:
+#   GROCERY_LLM_REPO=Qwen/Qwen2.5-3B-Instruct-GGUF
+#   GROCERY_LLM_FILE=qwen2.5-3b-instruct-q4_k_m.gguf
+# and measure it with `uv run python -m eval.run` before switching.
 #
-# Weights live in models/ (gitignored), downloaded once on first run. We fetch
-# from ModelScope rather than Hugging Face because the corporate Zscaler proxy
-# blocks HF's and Ollama's model CDNs — ModelScope's CDN is reachable, and it
-# hosts the Qwen models first-party.
-MODELSCOPE_REPO = os.environ.get("GROCERY_LLM_REPO", "Qwen/Qwen2.5-7B-Instruct-GGUF")
-LLM_FILE = os.environ.get("GROCERY_LLM_FILE", "qwen2.5-7b-instruct-q4_k_m.gguf")
-LLM_URL = f"https://modelscope.cn/models/{MODELSCOPE_REPO}/resolve/master/{LLM_FILE}"
+# Weights download once on first run. We fetch from ModelScope rather than
+# Hugging Face because the corporate Zscaler proxy blocks HF's and Ollama's
+# model CDNs — ModelScope's CDN is reachable and hosts the Qwen GGUFs first-party.
+LLM_REPO = os.environ.get("GROCERY_LLM_REPO", "Qwen/Qwen3-4B-GGUF")
+LLM_FILE = os.environ.get("GROCERY_LLM_FILE", "Qwen3-4B-Q4_K_M.gguf")
+LLM_URL = f"https://modelscope.cn/models/{LLM_REPO}/resolve/master/{LLM_FILE}"
 
-# Where weights are cached. Override with GROCERY_MODELS_DIR on hosts where the
-# project dir isn't writable (the Space writes to a baked-in /app/models).
 MODELS_DIR = Path(os.environ.get("GROCERY_MODELS_DIR", Path(__file__).resolve().parent.parent / "models"))
 LLM_PATH = MODELS_DIR / LLM_FILE
 
-# --- Vision model (dormant — see extract/vision.py) ------------------------
-# A multimodal GGUF (Qwen2.5-VL) + its image projector (mmproj), run via
-# llama-cpp-python's Qwen25VLChatHandler. Not used by app.py (which OCRs
-# photos instead, see extract/ocr.py); kept for the same possible future
-# desktop build as the local LLM above.
-VISION_REPO = "ggml-org/Qwen2.5-VL-3B-Instruct-GGUF"
-VISION_FILE = "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"
-VISION_MMPROJ_FILE = "mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf"
-VISION_URL = f"https://modelscope.cn/models/{VISION_REPO}/resolve/master/{VISION_FILE}"
-VISION_MMPROJ_URL = f"https://modelscope.cn/models/{VISION_REPO}/resolve/master/{VISION_MMPROJ_FILE}"
-VISION_PATH = MODELS_DIR / VISION_FILE
-VISION_MMPROJ_PATH = MODELS_DIR / VISION_MMPROJ_FILE
-VISION_CONTEXT = 8192  # images consume many tokens; give the context room
-
 # Context window. Recipes are short; a modest window keeps CPU inference quick.
 LLM_CONTEXT = 8192
-# Cap on the readable text fed to the model (chars). Guards against a giant
-# page overflowing the context; trafilatura's main-content extract is usually
-# well under this.
+# Cap on the raw text fed to the model (chars) so a giant page can't overflow
+# the context; trafilatura's main-content extract is usually well under this.
 LLM_MAX_INPUT_CHARS = 16000
+# CPU threads for inference. None lets llama.cpp pick (physical core count).
+LLM_THREADS: int | None = None
 
 
-# --- Shopping categories (docs/design.md §3.3) ----------------------------
-# The canonical set of aisles the list is grouped by. This is a knob: reorder to
-# match your store's layout, or add/remove aisles. Quality Check #2 flags any
-# category outside this list; the keyword→aisle mapping lives in categorize.py.
-# `models.DEFAULT_CATEGORY` ("uncategorized") is the sentinel for "not yet
-# assigned" and is intentionally NOT in this list.
+# --- Shopping categories (extract/normalize.py) ----------------------------
+# The canonical set of aisles the list is grouped by, in display order. This is
+# a knob: reorder to match your store's layout, or add/remove aisles. The LLM
+# can only pick from this list (it's an enum in its output schema), and Quality
+# Check #2 flags anything outside it. `models.DEFAULT_CATEGORY`
+# ("uncategorized") is the "not yet assigned" sentinel, intentionally NOT here.
 CATEGORIES = [
     "produce",
     "meat & seafood",
@@ -80,14 +66,42 @@ CATEGORIES = [
     "other",
 ]
 
-# --- Sanity rules (Quality Check #2, docs/design.md §3.4) -----------------
+# Different names for the same product, mapped to one shopping name so they
+# merge on the list (extract/normalize.py). Keys are matched on the whole
+# lowercased name, singular or plural. Names the keyword table doesn't know
+# get this treatment from the LLM instead; this list is for common items the
+# table does know, which skip the LLM. Add pairs as you notice them.
+SYNONYMS = {
+    "scallion": "green onion",
+    "spring onion": "green onion",
+    "coriander leaves": "cilantro",
+    "fresh coriander": "cilantro",
+    "garbanzo bean": "chickpea",
+    "garbanzo": "chickpea",
+    "parmigiano reggiano": "parmesan cheese",
+    "parmesan": "parmesan cheese",
+    "confectioners sugar": "powdered sugar",
+    "icing sugar": "powdered sugar",
+    "caster sugar": "sugar",
+    "white sugar": "sugar",
+    "granulated sugar": "sugar",
+    "aubergine": "eggplant",
+    "courgette": "zucchini",
+    "kosher salt": "salt",
+    "sea salt": "salt",
+    "table salt": "salt",
+    "freshly ground black pepper": "black pepper",
+    "ground black pepper": "black pepper",
+}
+
+# --- Sanity rules (Quality Check #2, aggregate/combine.py) -----------------
 # A merged quantity above this is almost certainly a parse error (e.g. a year or
 # a stray page number that got read as an amount) — flag it for review.
 SANITY_MAX_QUANTITY = 1000
 
 # Ingredients recipes list but you don't actually buy — dropped from the combined
 # grocery list (they still appear in the per-recipe breakdown). Matched on the
-# exact normalized (lowercased) ingredient name, so real products like "coconut
+# exact normalized (lowercased) shopping name, so real products like "coconut
 # water" or "rose water" are NOT affected. Add your own as you notice them.
 EXCLUDE_FROM_LIST = {
     "water",
@@ -105,9 +119,9 @@ EXCLUDE_FROM_LIST = {
     "filtered water",
 }
 
-# --- Email export (app.py "Send email" button) ----------------------------
-# SMTP creds for emailing the built list to one or more addresses. Unset by
-# default — the button is disabled with a setup hint until these are provided.
+# --- Email export (app.py "Email…" button) ---------------------------------
+# SMTP creds for emailing the built list. Unset by default — the button is
+# disabled with a setup hint until these are provided.
 # For Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=you@gmail.com,
 # SMTP_PASSWORD=<16-char app password> (not your login password).
 SMTP_HOST = os.environ.get("GROCERY_SMTP_HOST", "")

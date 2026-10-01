@@ -10,7 +10,7 @@ before writing or changing code.
 - Don't add abstraction, config, or generality until a real need exists (YAGNI).
 
 ## 2. Python as much as possible
-- Python is the default for everything: pipeline, logic, and UI (Streamlit).
+- Python is the default for everything: pipeline, logic, and UI (PySide6).
 - Reach for a well-known library over custom code when it does the job cleanly.
 - Avoid other languages/tooling unless there's no reasonable Python option.
 

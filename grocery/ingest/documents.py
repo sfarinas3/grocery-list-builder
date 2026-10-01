@@ -1,10 +1,8 @@
 """Extract text from an uploaded recipe document (PDF, Word, or plain text).
 
 Just the text step — turning that text into ingredient lines is the local LLM's
-job (the same raw-text path as a non-JSON-LD web page), so documents are a
-full-mode feature. The heavy parsers (`pypdf`, `python-docx`) are imported lazily
-inside the functions so this module is safe to import even in lite mode, where
-they aren't installed.
+job (`extract/lines.py`, the same raw-text path as a non-JSON-LD web page). The
+parsers (`pypdf`, `python-docx`) are imported lazily so app start-up stays quick.
 """
 
 import io

@@ -3,9 +3,10 @@
 Every stage speaks in terms of these models, so getting them right is what keeps
 the stages decoupled (see docs/design.md §5). The flow they travel through:
 
-    ingest      -> RecipeContent   (a fetched recipe: raw lines and/or text)
-    parse+LLM   -> Ingredient[]    (one structured, categorized item per line)
-    aggregate   -> GroceryList     (merged across recipes, grouped for shopping)
+    ingest          -> RecipeContent   (a fetched recipe: raw lines and/or text)
+    lines + parse   -> Ingredient[]    (one structured item per ingredient line)
+    normalize       -> Ingredient[]    (+ shopping name and aisle, via the LLM)
+    aggregate       -> GroceryList     (merged across recipes, grouped for shopping)
 
 These are pydantic models: they validate types on creation and give us clean
 `.model_dump()` / `.model_validate()` for free (handy for caching and the UI).
@@ -13,9 +14,8 @@ These are pydantic models: they validate types on creation and give us clean
 
 from pydantic import BaseModel, Field
 
-# Default aisle for an item we haven't categorized yet. The *canonical* list of
-# shopping categories is policy, not data — it will live in config.py so it's
-# easy to tweak in one place, and Quality Check #2 flags anything outside it.
+# Default aisle for an item we haven't categorized yet. The canonical list of
+# shopping categories lives in config.py; Quality Check #2 flags anything outside it.
 DEFAULT_CATEGORY = "uncategorized"
 
 
@@ -24,8 +24,8 @@ class RecipeContent(BaseModel):
 
     Populated one of two ways (docs/design.md §3.1):
       - JSON-LD path  -> `ingredient_lines` filled with clean lines, `raw_text` empty.
-      - text fallback -> `raw_text` filled with readable page text; the local LLM
-        later pulls the lines out of it.
+      - raw text      -> `raw_text` filled with page/document/OCR text; the local
+        LLM later pulls the lines out of it (`extract/lines.py`).
     """
 
     source_url: str | None = None          # where it came from (None if pasted by hand)
@@ -38,14 +38,15 @@ class RecipeContent(BaseModel):
 class Ingredient(BaseModel):
     """A single parsed, categorized ingredient from one recipe.
 
-    This is the output of parse + categorize: `ingredient-parser` (CRF) splits a
-    line into quantity/unit/name/comment, and the categorizer assigns `category`.
+    `ingredient-parser` (CRF) splits a line into quantity/unit/name/comment;
+    `extract/normalize.py` then sets `shopping_name` and `category`.
     `quantity` is intentionally NOT bounded to be positive here — a bad parse can
     produce a negative or zero value, and we want it to flow through so Quality
     Check #2 can flag it rather than crash on construction.
     """
 
-    name: str                              # canonical ingredient name, e.g. "garlic"
+    name: str                              # ingredient name as the recipe wrote it, e.g. "yellow onions"
+    shopping_name: str = ""                # what to buy, e.g. "onion" — the merge key; "" until normalized
     quantity: float | None = None          # e.g. 2.0; None for "to taste" / unquantified
     unit: str | None = None                # e.g. "clove", "cup"; None when there is no unit
     category: str = DEFAULT_CATEGORY       # shopping aisle, e.g. "produce" (see config.py)

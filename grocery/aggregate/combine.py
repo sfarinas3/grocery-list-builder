@@ -1,7 +1,9 @@
 """Merge ingredients from several recipes into one grocery list (design §3.4).
 
 The rule, kept deliberately simple (correctness over cleverness in v1):
-  - One line per ingredient name (case-insensitive).
+  - One line per shopping name (case-insensitive) — set by the LLM in
+    `extract/normalize.py`, so "yellow onions" and "onion" land on one line.
+    The recipes' own wording is kept in the notes so a merge can be checked.
   - Amounts are summed when the contributions share a unit (folding trivial
     plurals, so "clove" + "cloves" combine). We do NOT convert between units
     (cups↔grams etc.); a genuinely mixed set of units is shown as a breakdown in
@@ -23,8 +25,8 @@ def combine(recipes: list[tuple[str, list[Ingredient]]]) -> GroceryList:
     order: list[str] = []  # preserve first-seen order for stable output
     for recipe_name, ingredients in recipes:
         for ing in ingredients:
-            key = ing.name.strip().lower() or "(unnamed)"
-            if key in config.EXCLUDE_FROM_LIST:
+            key = _merge_key(_shopping_name(ing)) or "(unnamed)"
+            if _shopping_name(ing).lower() in config.EXCLUDE_FROM_LIST:
                 continue  # e.g. plain/pasta water — not a thing you buy
             if key not in groups:
                 groups[key] = []
@@ -41,16 +43,17 @@ def _merge(entries: list[tuple[str, Ingredient]]) -> GroceryItem:
     ingredients = [ing for _, ing in entries]
     quantity, unit, amount_note, mixed_units = _combine_amounts(ingredients)
 
-    # Keep the first recipe's spelling of the name; category from the first
-    # contribution that actually got categorized.
-    name = ingredients[0].name
+    # Category from the first contribution that actually got categorized.
+    name = _shopping_name(ingredients[0])
     category = next(
         (ing.category for ing in ingredients if ing.category != DEFAULT_CATEGORY),
         DEFAULT_CATEGORY,
     )
 
     prep_notes = _unique(ing.notes for ing in ingredients if ing.notes)
-    notes = "; ".join(([amount_note] if amount_note else []) + prep_notes)
+    variants = _unique(ing.name for ing in ingredients if ing.name.lower() != name.lower())
+    variant_note = ["as: " + ", ".join(variants)] if variants else []
+    notes = "; ".join(([amount_note] if amount_note else []) + variant_note + prep_notes)
 
     flags = _unique(flag for ing in ingredients for flag in ing.flags)
     if mixed_units:
@@ -65,6 +68,28 @@ def _merge(entries: list[tuple[str, Ingredient]]) -> GroceryItem:
         sources=_unique(recipe_name for recipe_name, _ in entries),
         flags=flags,
     )
+
+
+def _shopping_name(ing: Ingredient) -> str:
+    """The name to shop by — the normalized one if set, else the recipe's own."""
+    return (ing.shopping_name or ing.name).strip()
+
+
+def _merge_key(name: str) -> str:
+    """Lowercase and fold plurals word by word, so "onions" and "onion" merge.
+
+    Only used as a grouping key (never displayed), so it just has to be
+    consistent, not good English: "molasses" -> "molass" on both sides is fine.
+    """
+    words = re.sub(r"[^a-z0-9 ]", " ", name.lower()).split()
+    return " ".join(_singular(w) for w in words)
+
+
+def _singular(word: str) -> str:
+    """berries -> berry, tomatoes -> tomato, onions -> onion; "hummus"/"couscous" kept."""
+    word = re.sub(r"ies$", "y", word)
+    word = re.sub(r"oes$", "o", word)
+    return re.sub(r"(?<=[^su])s$", "", word)
 
 
 def _combine_amounts(ingredients: list[Ingredient]) -> tuple[float | None, str | None, str, bool]:

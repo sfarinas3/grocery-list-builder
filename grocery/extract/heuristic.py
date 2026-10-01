@@ -1,14 +1,16 @@
 """Finds candidate ingredient lines within raw, unstructured text (OCR output,
-document text, a non-JSON-LD web page) — the job the local LLM used to do
-before it was dropped from this app (see docs/design.md and `local_llm.py`).
+document text, a non-JSON-LD web page) with plain pattern rules, no model.
 
-A plain heuristic, deliberately not a trained model: heading detection first
-("Ingredients:" ... next section), a quantity/unit line filter as a fallback
-when no heading is found. Reuses the real `ingredient_parser` library's own
-number/unit word lists rather than duplicating them. First cut, not tuned
-against a large corpus — mirrors the same approach already validated (and
-iterated on against real photos) in the Android app's
-`IngredientLineFinder.kt`; expect this to need the same kind of tuning here.
+Two roles (see `extract/lines.py`): the recall check against the LLM's line
+extraction — any line found here but not by the LLM gets a second look — and
+the whole line-finder when the model isn't available.
+
+Heading detection first ("Ingredients:" ... next section), a quantity/unit line
+filter as a fallback when no heading is found. Reuses the real
+`ingredient_parser` library's own number/unit word lists rather than
+duplicating them. Not tuned against a large corpus; since it's now a safety
+net rather than the primary path, false positives here only cost an extra
+LLM check.
 """
 
 import re

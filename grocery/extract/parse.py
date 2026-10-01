@@ -3,8 +3,8 @@
 This is the accuracy-critical step (docs/design.md §3.2). It delegates the hard
 "2 cloves garlic, minced" -> fields split to `ingredient-parser`, a trained CRF
 model purpose-built for ingredient phrases — far more reliable at this than a
-small general LLM. Category is deliberately left unset here; assigning shopping
-aisles is a separate step (docs/design.md §3.3 / build step 4).
+small general LLM. Shopping name and aisle are deliberately left unset here;
+that's `extract/normalize.py`'s job.
 
 Note: `ingredient_parser` downloads a small NLTK data file on first use, and
 loading the CRF model makes the first `parse_line` call slower than later ones.
@@ -16,40 +16,43 @@ from grocery.models import Ingredient
 
 
 def parse_lines(lines: list[str], *, source_url: str | None = None) -> list[Ingredient]:
-    """Parse many ingredient lines. One `Ingredient` per line."""
-    return [parse_line(line, source_url=source_url) for line in lines]
+    """Parse many ingredient lines (a line can yield more than one `Ingredient`)."""
+    return [ing for line in lines for ing in parse_line(line, source_url=source_url)]
 
 
-def parse_line(line: str, *, source_url: str | None = None) -> Ingredient:
-    """Parse a single ingredient line into an `Ingredient` (category left as default)."""
+def parse_line(line: str, *, source_url: str | None = None) -> list[Ingredient]:
+    """Parse a single ingredient line (shopping name and category left unset)."""
     parsed = parse_ingredient(line)
-
-    # `name` is a list (a line can name more than one ingredient, e.g. "salt and
-    # pepper"). v1 keeps one Ingredient per line and joins the names so nothing
-    # is silently dropped; the human-review step can split it if needed. If the
-    # CRF found no name, fall back to the raw line and flag it for review.
-    name = ", ".join(n.text for n in parsed.name).strip()
-    flags: list[str] = []
-    if not name:
-        name = line.strip()
-        flags.append("unparsed_name")
-
     quantity, unit = _first_amount(parsed.amount)
     notes = _join_notes(parsed.preparation, parsed.comment)
 
-    # Confidence tracks the *name* — that's what you actually shop by, so it's
-    # the signal worth surfacing. No name parsed -> zero confidence.
-    confidence = round(parsed.name[0].confidence, 4) if parsed.name else 0.0
+    # The CRF returns a list of names because a line can name several things.
+    # With no amount ("salt and pepper to taste") they're separate items to buy.
+    # With an amount ("1 cup milk or cream") they're usually alternatives
+    # sharing it, so keep one item rather than double-buying.
+    names = [_clean_name(n.text) for n in parsed.name if _clean_name(n.text)]
+    if len(names) > 1 and quantity is None and unit is None:
+        groups = [[n] for n in names]
+    else:
+        groups = [names] if names else []
 
-    return Ingredient(
-        name=name,
-        quantity=quantity,
-        unit=unit,
-        notes=notes,
-        source_url=source_url,
-        confidence=confidence,
-        flags=flags,
-    )
+    if not groups:  # CRF found no name: keep the raw line and flag it for review
+        return [Ingredient(name=line.strip(), notes=notes, source_url=source_url,
+                           confidence=0.0, flags=["unparsed_name"])]
+
+    # Confidence tracks the *name* — that's what you actually shop by, so it's
+    # the signal worth surfacing.
+    confidence = round(min(n.confidence for n in parsed.name), 4)
+    return [
+        Ingredient(name=" or ".join(group), quantity=quantity, unit=unit, notes=notes,
+                   source_url=source_url, confidence=confidence)
+        for group in groups
+    ]
+
+
+def _clean_name(text: str) -> str:
+    """Strip stray punctuation the CRF leaves on names ("chicken broth.", "sauce*")."""
+    return text.strip().strip(".,;:*†").strip()
 
 
 # --- Field extraction helpers ---------------------------------------------

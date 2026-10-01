@@ -1,400 +1,427 @@
-"""Streamlit UI (docs/design.md §3.5).
+"""Desktop app: recipe links / pasted text / photos / documents -> grocery list.
 
-Paste one or more recipe URLs, build a consolidated grocery list, then edit it:
-tick items off, fix quantities/categories/names, and add or remove rows. The
-editable table is the human-review safety net (Quality Check #3). Its state lives
-in the widget (keyed) and survives the reruns that editing triggers; a fresh
-"Build list" resets it via a bumped key.
+The UI end of the pipeline (docs/design.md §3.5). All the real work lives in
+`grocery/pipeline.py`; this file only collects inputs, runs the pipeline off
+the UI thread, and shows the result as an editable, aisle-grouped checklist —
+the human-review step (Quality Check #3) where any miss gets fixed before
+shopping.
 
-Run with:  uv run streamlit run app.py
+Run:  uv run python app.py
 """
 
 import re
+import sys
+import traceback
+from pathlib import Path
 
-import pandas as pd
-import streamlit as st
-
-from grocery import config
-from grocery.aggregate.combine import combine
-from grocery.ingest.web import IngestError
-from grocery.models import DEFAULT_CATEGORY, Ingredient
-from grocery.pipeline import process_document, process_image, process_url
-
-
-@st.cache_resource(show_spinner=False)
-def get_extractor():
-    """The shared extraction backend — model-free (`extract/lite.py`).
-
-    A local-LLM backend still exists (`extract/local_llm.py`) but isn't wired
-    in here; it's parked for a possible future desktop build (see
-    docs/design.md).
-    """
-    from grocery.extract.lite import LiteExtractor
-
-    return LiteExtractor()
-
-
-@st.cache_data(show_spinner=False)
-def run_pipeline(url: str):
-    """Cached per url so re-runs don't re-fetch."""
-    return process_url(url, get_extractor())
-
-
-@st.cache_data(show_spinner=False)
-def run_image(image_bytes: bytes, name: str):
-    """Cached per image so re-building doesn't re-run OCR."""
-    return process_image(image_bytes, name, get_extractor())
-
-
-@st.cache_data(show_spinner=False)
-def run_document(file_bytes: bytes, filename: str):
-    """Cached per document so re-building doesn't re-read."""
-    return process_document(file_bytes, filename, get_extractor())
-
-
-def parse_urls(text: str) -> list[str]:
-    """Pull recipe URLs out of free text, separated by newlines, commas, or spaces.
-
-    Forgiving on purpose — paste a whole block however it's formatted. Keeps only
-    http(s) links and de-duplicates while preserving order.
-    """
-    seen: set[str] = set()
-    urls: list[str] = []
-    for token in re.split(r"[\s,]+", text.strip()):
-        if token.startswith(("http://", "https://")) and token not in seen:
-            seen.add(token)
-            urls.append(token)
-    return urls
-
-
-def _format_quantity(quantity: float | None) -> str:
-    if quantity is None:
-        return ""
-    return str(int(quantity)) if quantity == int(quantity) else f"{quantity:g}"
-
-
-def ingredients_table(ingredients: list[Ingredient]) -> pd.DataFrame:
-    """Read-only per-recipe table, rows ordered by shopping aisle then name."""
-    order = {category: i for i, category in enumerate(config.CATEGORIES)}
-    rows = sorted(ingredients, key=lambda ing: (order.get(ing.category, len(order)), ing.name.lower()))
-    return pd.DataFrame(
-        [
-            {
-                "Ingredient": ing.name,
-                "Quantity": _format_quantity(ing.quantity),
-                "Unit": ing.unit or "",
-                "Category": ing.category,
-                "Notes": ing.notes,
-                "Review": "⚠️" if ing.flags else "",
-            }
-            for ing in rows
-        ],
-        columns=["Ingredient", "Quantity", "Unit", "Category", "Notes", "Review"],
-    )
-
-
-def editor_dataframe(items) -> pd.DataFrame:
-    """Seed table for the editable grocery list (Quantity stays numeric)."""
-    df = pd.DataFrame(
-        [
-            {
-                "Done": it.checked,
-                "Ingredient": it.name,
-                "Quantity": it.quantity,
-                "Unit": it.unit or "",
-                "Category": it.category,
-                "Recipe(s)": " / ".join(it.sources),
-                "Notes": it.notes,
-                "Review": "⚠️" if it.flags else "",
-            }
-            for it in items
-        ],
-        columns=["Done", "Ingredient", "Quantity", "Unit", "Category", "Recipe(s)", "Notes", "Review"],
-    )
-    # Ensure Quantity is a numeric column so the NumberColumn editor behaves.
-    df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce")
-    return df
-
-
-def grocery_csv(edited: pd.DataFrame, recipe_links: list[tuple[str, str]]) -> bytes:
-    """The current (edited) list as CSV, dropping the internal Review flag column.
-
-    Any recipe source links are appended as a second little table at the bottom.
-    """
-    body = edited.drop(columns=["Review"], errors="ignore").to_csv(index=False)
-    if recipe_links:
-        body += "\n" + pd.DataFrame(recipe_links, columns=["Recipe", "Link"]).to_csv(index=False)
-    return body.encode("utf-8")
-
-
-def grocery_text(edited: pd.DataFrame, recipe_links: list[tuple[str, str]]) -> str:
-    """The current (edited) list as a readable, aisle-grouped shopping list.
-
-    Recipe source links (for URL recipes) are listed at the bottom.
-    """
-    order = {category: i for i, category in enumerate(config.CATEGORIES)}
-    rows = [r for r in edited.to_dict("records") if str(r.get("Ingredient") or "").strip()]
-    rows.sort(key=lambda r: (order.get(r.get("Category"), len(order)), str(r["Ingredient"]).lower()))
-    lines = ["Grocery List"]
-    current_category = object()  # sentinel so the first real category prints a header
-    for row in rows:
-        category = row.get("Category") or "uncategorized"
-        if category != current_category:
-            lines += ["", category.upper()]
-            current_category = category
-        quantity = None if pd.isna(row.get("Quantity")) else row.get("Quantity")
-        amount = f"{_format_quantity(quantity)} {row.get('Unit') or ''}".strip()
-        item = f"{amount} {row['Ingredient']}".strip() if amount else str(row["Ingredient"])
-        if str(row.get("Notes") or "").strip():
-            item += f" ({row['Notes']})"
-        lines.append(f"  {'[x]' if row.get('Done') else '[ ]'} {item}")
-    if recipe_links:
-        lines += ["", "Recipes:"]
-        lines += [f"  - {name}: {url}" for name, url in recipe_links]
-    return "\n".join(lines)
-
-
-def send_email(to_addrs: list[str], body: str) -> None:
-    """Email the plain-text list to one or more recipients via config.SMTP_*."""
-    import smtplib
-    from email.mime.text import MIMEText
-
-    msg = MIMEText(body)
-    msg["Subject"] = "Grocery List"
-    msg["From"] = config.SMTP_FROM
-    msg["To"] = ", ".join(to_addrs)
-    with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT) as server:
-        server.starttls()
-        server.login(config.SMTP_USER, config.SMTP_PASSWORD)
-        server.sendmail(config.SMTP_FROM, to_addrs, msg.as_string())
-
-
-st.set_page_config(page_title="Grocery List Builder", page_icon="🛒")
-st.title("🛒 Grocery List Builder")
-st.caption("Paste one or more recipe links — I'll pull out the ingredients. Runs entirely on your machine.")
-
-urls_text = st.text_area(
-    "Recipe URLs",
-    height=140,
-    placeholder=(
-        "Paste one or more links, separated by new lines, commas, or spaces:\n\n"
-        "https://www.budgetbytes.com/spaghetti-aglio-e-olio/\n"
-        "https://www.budgetbytes.com/garlic-noodles/"
-    ),
-    help="New lines, commas, or spaces all work.",
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
+from PySide6.QtGui import QAction, QBrush, QColor, QKeySequence
+from PySide6.QtWidgets import (
+    QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QListWidget,
+    QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSplitter,
+    QTabWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
-# Photo input. Photos accumulate in session state so the user can add several —
-# camera_input is single-shot, so each capture is appended via an "Add" button,
-# which also resets the widget (via a bumped key) for the next one. Camera
-# access needs a secure context — works on localhost; a deployed server would
-# need HTTPS.
-IMAGE_LIMIT = 10
+from grocery import config, export, pipeline
+from grocery.extract.llm import LocalLLM
+from grocery.models import DEFAULT_CATEGORY, GroceryItem, GroceryList
 
-st.session_state.setdefault("photos", [])  # list of (label, bytes)
-st.session_state.setdefault("img_round", 0)  # bump to reset camera/uploader widgets
-photos = st.session_state.photos
+IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
+DOCUMENT_TYPES = {".pdf", ".docx", ".txt", ".md"}
+FLAG_COLOR = QColor("#fff3cd")  # pale amber: "check this row"
 
-with st.expander(f"📷 Add recipes from photos (up to {IMAGE_LIMIT})"):
-    st.caption(f"{len(photos)}/{IMAGE_LIMIT} added. Reads the photo with OCR, then finds the ingredient lines.")
-    if photos:
-        columns = st.columns(5)
-        for i, (label, data) in enumerate(photos):
-            columns[i % 5].image(data, caption=label, use_container_width=True)
-        if st.button("🗑️ Clear photos"):
-            st.session_state.photos = []
-            st.session_state.img_round += 1
-            st.rerun()
+# Plain-English versions of the flags the pipeline sets, for row tooltips.
+FLAG_TEXT = {
+    "needs_category": "No aisle found — pick one (right-click)",
+    "mixed_units": "Amounts in different units — see notes",
+    "unparsed_name": "Couldn't parse this line — check the name",
+    "bad_quantity": "Zero or negative amount",
+    "absurd_quantity": "Unusually large amount — likely a misread",
+    "empty_name": "No name",
+}
 
-    if len(photos) >= IMAGE_LIMIT:
-        st.info(f"Photo limit reached ({IMAGE_LIMIT}). Clear some to add more.")
-    else:
-        camera_tab, upload_tab = st.tabs(["📸 Take a photo", "📁 Upload"])
-        with camera_tab:
-            shot = st.camera_input("Camera", key=f"cam{st.session_state.img_round}", label_visibility="collapsed")
-            if st.button("➕ Add this photo", disabled=shot is None):
-                photos.append((f"Photo {len(photos) + 1}", shot.getvalue()))
-                st.session_state.img_round += 1
-                st.rerun()
-        with upload_tab:
-            uploads = st.file_uploader(
-                "Upload", type=["png", "jpg", "jpeg", "webp"],
-                accept_multiple_files=True, key=f"up{st.session_state.img_round}",
-                label_visibility="collapsed",
-            )
-            if st.button("➕ Add these", disabled=not uploads):
-                for uploaded_file in uploads[: IMAGE_LIMIT - len(photos)]:
-                    photos.append((uploaded_file.name, uploaded_file.getvalue()))
-                st.session_state.img_round += 1
-                st.rerun()
+# Columns of the grocery list tree.
+COL_ITEM, COL_QTY, COL_UNIT, COL_NOTES, COL_SOURCES = range(5)
 
-image_inputs = st.session_state.get("photos", [])
 
-# Document input (PDF / Word / text) — same accumulate-then-build pattern as photos.
-DOC_LIMIT = 10
-st.session_state.setdefault("docs", [])  # list of (filename, bytes)
-st.session_state.setdefault("doc_round", 0)
-docs = st.session_state.docs
+# --- Background work ---------------------------------------------------------
 
-with st.expander(f"📄 Add recipes from documents — PDF, Word, or text (up to {DOC_LIMIT})"):
-    st.caption(f"{len(docs)}/{DOC_LIMIT} added. Reads the text, then finds the ingredient lines.")
-    if docs:
-        for position, (fname, _) in enumerate(docs, start=1):
-            st.write(f"{position}. {fname}")
-        if st.button("🗑️ Clear documents"):
-            st.session_state.docs = []
-            st.session_state.doc_round += 1
-            st.rerun()
+class _Signals(QObject):
+    progress = Signal(str)
+    done = Signal(object)
+    failed = Signal(str)
 
-    if len(docs) >= DOC_LIMIT:
-        st.info(f"Document limit reached ({DOC_LIMIT}). Clear some to add more.")
-    else:
-        doc_uploads = st.file_uploader(
-            "Upload documents", type=["pdf", "txt", "md", "docx"],
-            accept_multiple_files=True, key=f"doc{st.session_state.doc_round}",
-            label_visibility="collapsed",
+
+class Task(QRunnable):
+    """Run `fn(progress)` on the worker thread, reporting back via Qt signals."""
+
+    def __init__(self, fn):
+        super().__init__()
+        self.fn, self.signals = fn, _Signals()
+
+    def run(self):
+        try:
+            self.signals.done.emit(self.fn(self.signals.progress.emit))
+        except Exception as exc:  # noqa: BLE001 — surface any failure in the UI
+            traceback.print_exc()
+            self.signals.failed.emit(str(exc) or type(exc).__name__)
+
+
+# --- Main window -------------------------------------------------------------
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Grocery List Builder")
+        self.resize(1200, 760)
+
+        # One worker thread: the model isn't thread-safe, and this also makes a
+        # build queue up behind the start-up model load automatically.
+        self.pool = QThreadPool(maxThreadCount=1)
+        self.llm = LocalLLM()
+        self.llm_ok = False
+        self.files: list[Path] = []
+        self.recipe_links: list[tuple[str, str]] = []
+
+        splitter = QSplitter()
+        splitter.addWidget(self._build_inputs())
+        splitter.addWidget(self._build_results())
+        splitter.setSizes([420, 780])
+        self.setCentralWidget(splitter)
+
+        self.model_status = QLabel()
+        self.statusBar().addPermanentWidget(self.model_status)
+        self._load_model()
+
+    # -- layout --
+
+    def _build_inputs(self) -> QWidget:
+        """Left side: the three ways to add recipes, plus the Build button."""
+        self.urls = QPlainTextEdit(placeholderText="Paste recipe links, one per line")
+        self.pasted = QPlainTextEdit(
+            placeholderText="Paste a recipe's text here (handy when a site blocks fetching).\n"
+                            "Separate several recipes with a line containing only ---"
         )
-        if st.button("➕ Add these documents", disabled=not doc_uploads):
-            for uploaded_file in doc_uploads[: DOC_LIMIT - len(docs)]:
-                docs.append((uploaded_file.name, uploaded_file.getvalue()))
-            st.session_state.doc_round += 1
-            st.rerun()
 
-document_inputs = st.session_state.get("docs", [])
+        self.file_list = QListWidget()
+        add_files = QPushButton("Add photos / documents…", clicked=self._add_files)
+        remove_files = QPushButton("Remove selected", clicked=self._remove_files)
+        files_tab = QWidget()
+        files_layout = QVBoxLayout(files_tab)
+        files_layout.addWidget(self.file_list)
+        buttons = QHBoxLayout()
+        buttons.addWidget(add_files)
+        buttons.addWidget(remove_files)
+        files_layout.addLayout(buttons)
 
-# Build on click. The result is stashed as a seed DataFrame in session state; a
-# bumped `build_id` gives the editor a fresh key so a new build starts clean
-# (rather than the keyed widget replaying edits from the previous list).
-if st.button("Build list", type="primary"):
-    urls = parse_urls(urls_text)
-    if not urls and not image_inputs and not document_inputs:
-        st.warning("Paste a recipe URL (http:// or https://), or add a photo or document, to build a list.")
+        tabs = QTabWidget()
+        tabs.addTab(self.urls, "Links")
+        tabs.addTab(self.pasted, "Paste text")
+        tabs.addTab(files_tab, "Photos && documents")
 
-    results = []  # (recipe_name, RecipeContent, ingredients) for each URL that succeeded
-    for url in urls:
-        with st.spinner(f"Processing {url} …"):
+        self.build_button = QPushButton("Build list", clicked=self._build)
+        self.build_button.setDefault(True)
+        self.build_button.setMinimumHeight(36)
+
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.addWidget(tabs)
+        layout.addWidget(self.build_button)
+        return panel
+
+    def _build_results(self) -> QWidget:
+        """Right side: the editable grocery list and a per-recipe breakdown."""
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Item", "Qty", "Unit", "Notes", "Recipe(s)"])
+        for col, width in ((COL_ITEM, 240), (COL_QTY, 50), (COL_UNIT, 90), (COL_NOTES, 260)):
+            self.tree.setColumnWidth(col, width)
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._item_menu)
+        delete = QAction(self.tree, shortcut=QKeySequence.Delete, triggered=self._delete_selected)
+        self.tree.addAction(delete)
+
+        self.breakdown = QTreeWidget()
+        self.breakdown.setHeaderLabels(["Ingredient (as written)", "Amount", "Shopping name", "Aisle"])
+        self.breakdown.setColumnWidth(0, 300)
+
+        tabs = QTabWidget()
+        tabs.addTab(self.tree, "Grocery list")
+        tabs.addTab(self.breakdown, "By recipe")
+
+        hint = QLabel("Double-click to edit · tick when bought · right-click to change aisle or delete · "
+                      "amber rows need a look")
+        hint.setStyleSheet("color: gray")
+        add_item = QPushButton("Add item", clicked=self._add_item)
+        copy = QPushButton("Copy as text", clicked=self._copy)
+        save = QPushButton("Save CSV…", clicked=self._save_csv)
+        self.email_button = QPushButton("Email…", clicked=self._email)
+        if not export.email_configured():
+            self.email_button.setEnabled(False)
+            self.email_button.setToolTip("Set the GROCERY_SMTP_* environment variables (see config.py)")
+
+        buttons = QHBoxLayout()
+        for button in (add_item, copy, save, self.email_button):
+            buttons.addWidget(button)
+        buttons.addStretch()
+
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.addWidget(tabs)
+        layout.addWidget(hint)
+        layout.addLayout(buttons)
+        return panel
+
+    # -- model --
+
+    def _load_model(self):
+        """Download (first run only) and load the model in the background."""
+        self.model_status.setText("Preparing model…")
+        def load(progress):
+            self.llm.load(log=progress)
+            # Set here on the worker thread, not in the `done` handler: a build
+            # queued during start-up runs on this same thread right after, and
+            # would otherwise start before the UI thread has seen the signal.
+            self.llm_ok = True
+
+        task = Task(load)
+        task.signals.progress.connect(self.model_status.setText)
+        task.signals.done.connect(self._model_ready)
+        task.signals.failed.connect(self._model_failed)
+        self.pool.start(task)
+
+    def _model_ready(self, _):
+        self.model_status.setText(f"Model: {config.LLM_FILE}")
+
+    def _model_failed(self, error: str):
+        self.model_status.setText("Model unavailable — basic mode")
+        self.model_status.setToolTip(error)
+        QMessageBox.warning(
+            self, "Model unavailable",
+            f"The local model couldn't be loaded, so lists will be built with the basic "
+            f"(no-model) rules — expect more misses to fix by hand.\n\n{error}",
+        )
+
+    # -- inputs --
+
+    def _add_files(self):
+        patterns = " ".join(f"*{ext}" for ext in sorted(IMAGE_TYPES | DOCUMENT_TYPES))
+        paths, _ = QFileDialog.getOpenFileNames(self, "Add recipes", "", f"Recipes ({patterns})")
+        for path in map(Path, paths):
+            if path not in self.files:
+                self.files.append(path)
+                self.file_list.addItem(path.name)
+
+    def _remove_files(self):
+        for row in sorted((self.file_list.row(i) for i in self.file_list.selectedItems()), reverse=True):
+            self.file_list.takeItem(row)
+            del self.files[row]
+
+    def _collect_jobs(self) -> list[tuple[str, callable]]:
+        """One (label, fn(llm) -> Recipe) per input, so the worker can loop over them."""
+        jobs = []
+        urls = dict.fromkeys(re.findall(r"https?://\S+", self.urls.toPlainText()))
+        for url in urls:
+            jobs.append((url, lambda llm, u=url: pipeline.process_url(u, llm)))
+        for text in re.split(r"^\s*---\s*$", self.pasted.toPlainText(), flags=re.M):
+            if text.strip():
+                title = text.strip().splitlines()[0][:60]  # a recipe's first line is usually its name
+                jobs.append((title, lambda llm, t=text, n=title: pipeline.process_text(t, n, llm)))
+        for path in self.files:
+            process = pipeline.process_image if path.suffix.lower() in IMAGE_TYPES else pipeline.process_document
+            jobs.append((path.name, lambda llm, p=path, f=process: f(p.read_bytes(), p.name, llm)))
+        return jobs
+
+    # -- build --
+
+    def _build(self):
+        jobs = self._collect_jobs()
+        if not jobs:
+            QMessageBox.information(self, "Nothing to build", "Add a recipe link, some text, or a file first.")
+            return
+        self.build_button.setEnabled(False)
+        self.statusBar().showMessage("Waiting for the model to finish loading…")
+        task = Task(lambda progress: self._run_build(jobs, progress))
+        task.signals.progress.connect(self.statusBar().showMessage)
+        task.signals.done.connect(self._show_results)
+        task.signals.failed.connect(self._build_failed)
+        self.pool.start(task)
+
+    def _run_build(self, jobs, progress):
+        """Worker thread: run every input through the pipeline, then merge."""
+        llm = self.llm if self.llm_ok else None
+        recipes, errors = [], []
+        for n, (label, job) in enumerate(jobs, 1):
+            progress(f"Reading recipe {n} of {len(jobs)}: {label}")
             try:
-                content, ingredients = run_pipeline(url)
-            except IngestError as exc:
-                st.error(str(exc))
-                continue
-            except Exception as exc:  # noqa: BLE001 — surface anything else to the user
-                st.error(f"Unexpected error for {url}: {exc}")
-                continue
+                recipes.append(job(llm))
+            except Exception as exc:  # noqa: BLE001 — one bad input shouldn't sink the batch
+                errors.append(f"{label}: {exc}")
+        progress("Organizing the list…")
+        grocery = pipeline.build_list(recipes, llm) if recipes else GroceryList()
+        return recipes, grocery, errors
 
-        if not ingredients:
-            st.warning(f"No ingredients found for {url} — the page may be unsupported.")
-            continue
+    def _build_failed(self, error: str):
+        self.build_button.setEnabled(True)
+        self.statusBar().clearMessage()
+        QMessageBox.critical(self, "Build failed", error)
 
-        results.append((content.title or url, content, ingredients))
+    def _show_results(self, result):
+        recipes, grocery, errors = result
+        self.build_button.setEnabled(True)
+        self.recipe_links = [(pipeline.recipe_label(c), c.source_url) for c, _ in recipes if c.source_url]
+        self._fill_list(grocery)
+        self._fill_breakdown(recipes)
+        flagged = sum(1 for it in grocery.items if it.flags)
+        self.statusBar().showMessage(
+            f"{len(grocery.items)} items from {len(recipes)} recipe(s)"
+            + (f" · {flagged} to check" if flagged else "")
+        )
+        if errors:
+            QMessageBox.warning(self, "Some recipes couldn't be read", "\n\n".join(errors))
 
-    # Recipe photos → OCR reads each into text, then the heuristic finds the lines.
-    for name, image_bytes in image_inputs:
-        with st.spinner(f"Reading {name} …"):
-            try:
-                content, ingredients = run_image(image_bytes, name)
-            except Exception as exc:  # noqa: BLE001 — surface anything else to the user
-                st.error(f"Couldn't read {name}: {exc}")
-                continue
-        if not ingredients:
-            st.warning(f"No ingredients read from {name} — try a clearer photo.")
-            continue
-        results.append((name, content, ingredients))
+    # -- grocery list tree --
 
-    # Recipe documents → read text, then the heuristic finds the ingredient lines.
-    for filename, file_bytes in document_inputs:
-        with st.spinner(f"Reading {filename} …"):
-            try:
-                content, ingredients = run_document(file_bytes, filename)
-            except Exception as exc:  # noqa: BLE001 — surface anything else to the user
-                st.error(f"Couldn't read {filename}: {exc}")
-                continue
-        if not ingredients:
-            st.warning(f"No ingredients found in {filename} — it may not contain a recognizable recipe.")
-            continue
-        results.append((filename, content, ingredients))
+    def _aisle_node(self, category: str) -> QTreeWidgetItem:
+        """The top-level row for an aisle, created (in config order) if missing."""
+        for i in range(self.tree.topLevelItemCount()):
+            if self.tree.topLevelItem(i).text(0) == category:
+                return self.tree.topLevelItem(i)
+        node = QTreeWidgetItem([category])
+        node.setFlags(Qt.ItemIsEnabled)
+        font = node.font(0)
+        font.setBold(True)
+        node.setFont(0, font)
+        order = config.CATEGORIES + [DEFAULT_CATEGORY]
+        rank = order.index(category) if category in order else len(order)
+        position = sum(
+            1 for i in range(self.tree.topLevelItemCount())
+            if (order.index(t) if (t := self.tree.topLevelItem(i).text(0)) in order else len(order)) <= rank
+        )
+        self.tree.insertTopLevelItem(position, node)
+        node.setExpanded(True)
+        node.setFirstColumnSpanned(True)
+        return node
 
-    if results:
-        grocery_list = combine([(name, ingredients) for name, _, ingredients in results])
-        aisle = {category: i for i, category in enumerate(config.CATEGORIES)}
-        grocery_list.items.sort(key=lambda it: (aisle.get(it.category, len(aisle)), it.name.lower()))
-        st.session_state.editor_base = editor_dataframe(grocery_list.items)
-        st.session_state.recipe_results = results
-        st.session_state.build_id = st.session_state.get("build_id", 0) + 1
+    def _add_row(self, item: GroceryItem):
+        row = QTreeWidgetItem([item.name, export.format_quantity(item.quantity), item.unit or "",
+                               item.notes, " / ".join(item.sources)])
+        row.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsUserCheckable)
+        row.setCheckState(COL_ITEM, Qt.Checked if item.checked else Qt.Unchecked)
+        if item.flags:
+            tip = "\n".join(FLAG_TEXT.get(f, f) for f in item.flags)
+            for col in range(self.tree.columnCount()):
+                row.setBackground(col, QBrush(FLAG_COLOR))
+                row.setToolTip(col, tip)
+        self._aisle_node(item.category).addChild(row)
 
+    def _fill_list(self, grocery: GroceryList):
+        self.tree.clear()
+        for item in export.sorted_items(grocery):
+            self._add_row(item)
 
-if "editor_base" in st.session_state:
-    st.header("🧾 Grocery list")
-    st.caption("Edit any cell — quantity, category, name, notes. Tick ✓ to shop; use the table's toolbar to add or delete rows.")
-
-    edited = st.data_editor(
-        st.session_state.editor_base,
-        key=f"grocery_editor_{st.session_state.build_id}",
-        num_rows="dynamic",
-        hide_index=True,
-        use_container_width=True,
-        column_config={
-            "Done": st.column_config.CheckboxColumn("✓", help="Tick items off as you shop"),
-            "Quantity": st.column_config.NumberColumn("Qty", min_value=0.0, format="%g"),
-            "Category": st.column_config.SelectboxColumn(
-                "Category", options=[*config.CATEGORIES, DEFAULT_CATEGORY]
-            ),
-            "Review": st.column_config.TextColumn(" ", width="small"),
-        },
-        disabled=["Recipe(s)", "Review"],  # provenance + flags aren't hand-edited
-    )
-
-    total = len(edited)
-    checked = int(edited["Done"].sum()) if total else 0
-    st.progress(checked / total if total else 0.0, text=f"{checked} of {total} items checked")
-
-    recipe_links = [
-        (name, content.source_url)
-        for name, content, _ in st.session_state.get("recipe_results", [])
-        if content.source_url
-    ]
-    csv_col, txt_col = st.columns(2)
-    csv_col.download_button(
-        "⬇️ Download CSV", grocery_csv(edited, recipe_links), file_name="grocery_list.csv",
-        mime="text/csv", use_container_width=True,
-    )
-    txt_col.download_button(
-        "⬇️ Download text", grocery_text(edited, recipe_links), file_name="grocery_list.txt",
-        mime="text/plain", use_container_width=True,
-    )
-    st.caption("⚠️ = flagged when built (low confidence, mixed units, or uncategorized).")
-
-    with st.expander("📧 Email this list"):
-        if not (config.SMTP_HOST and config.SMTP_USER and config.SMTP_PASSWORD):
-            st.caption(
-                "Not configured — set GROCERY_SMTP_HOST/PORT/USER/PASSWORD env vars "
-                "(see grocery/config.py) to enable sending."
-            )
-        else:
-            addrs_input = st.text_input("To (comma-separated for multiple)", key="email_addrs")
-            if st.button("Send", disabled=not addrs_input.strip()):
-                to_addrs = [a.strip() for a in addrs_input.split(",") if a.strip()]
+    def current_list(self) -> GroceryList:
+        """Read the (possibly edited) tree back into a `GroceryList` for export."""
+        items = []
+        for i in range(self.tree.topLevelItemCount()):
+            node = self.tree.topLevelItem(i)
+            for j in range(node.childCount()):
+                row = node.child(j)
                 try:
-                    send_email(to_addrs, grocery_text(edited, recipe_links))
-                    st.success(f"Sent to {', '.join(to_addrs)}")
-                except Exception as e:
-                    st.error(f"Failed to send: {e}")
+                    quantity = float(row.text(COL_QTY)) if row.text(COL_QTY).strip() else None
+                except ValueError:
+                    quantity = None
+                items.append(GroceryItem(
+                    name=row.text(COL_ITEM), quantity=quantity, unit=row.text(COL_UNIT) or None,
+                    category=node.text(0), notes=row.text(COL_NOTES),
+                    checked=row.checkState(COL_ITEM) == Qt.Checked,
+                    sources=[s for s in row.text(COL_SOURCES).split(" / ") if s],
+                ))
+        return GroceryList(items=items)
 
-    with st.expander("Per-recipe breakdown"):
-        for name, content, ingredients in st.session_state.get("recipe_results", []):
-            st.subheader(name)
-            source = "structured recipe data" if content.ingredient_lines else "extracted from page text"
-            bits = [f"{len(ingredients)} ingredients", source]
-            if content.servings:
-                bits.insert(0, f"serves {content.servings}")
-            st.caption(" · ".join(bits))
-            st.dataframe(ingredients_table(ingredients), hide_index=True, use_container_width=True)
+    def _item_menu(self, pos):
+        row = self.tree.itemAt(pos)
+        if row is None or row.parent() is None:
+            return
+        menu = QMenu(self)
+        move = menu.addMenu("Move to aisle")
+        for category in config.CATEGORIES:
+            move.addAction(category, lambda c=category: self._move(row, c))
+        menu.addAction("Delete", self._delete_selected)
+        menu.exec(self.tree.viewport().mapToGlobal(pos))
 
-    # Keep the source links handy so the shopper can pull a recipe back up later.
-    st.divider()
-    st.subheader("Recipes")
-    for name, content, _ in st.session_state.get("recipe_results", []):
-        if content.source_url:
-            st.markdown(f"- [{name}]({content.source_url})")
+    def _move(self, row: QTreeWidgetItem, category: str):
+        old = row.parent()
+        old.removeChild(row)
+        self._aisle_node(category).addChild(row)
+        if category in config.CATEGORIES:  # the "needs aisle" warning is resolved
+            for col in range(self.tree.columnCount()):
+                row.setBackground(col, QBrush())
+                row.setToolTip(col, "")
+        if old.childCount() == 0:
+            self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(old))
+
+    def _delete_selected(self):
+        for row in self.tree.selectedItems():
+            parent = row.parent()
+            if parent is None:
+                continue
+            parent.removeChild(row)
+            if parent.childCount() == 0:
+                self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(parent))
+
+    def _add_item(self):
+        self._add_row(GroceryItem(name="new item", category="other"))
+        node = self._aisle_node("other")
+        row = node.child(node.childCount() - 1)
+        self.tree.setCurrentItem(row)
+        self.tree.editItem(row, COL_ITEM)
+
+    # -- per-recipe breakdown --
+
+    def _fill_breakdown(self, recipes):
+        self.breakdown.clear()
+        for content, ingredients in recipes:
+            node = QTreeWidgetItem([pipeline.recipe_label(content)])
+            node.setFirstColumnSpanned(True)
+            self.breakdown.addTopLevelItem(node)
+            if not ingredients:
+                node.addChild(QTreeWidgetItem(["(no ingredients found — try pasting the text)"]))
+            for ing in ingredients:
+                amount = f"{export.format_quantity(ing.quantity)} {ing.unit or ''}".strip()
+                node.addChild(QTreeWidgetItem([ing.name, amount, ing.shopping_name, ing.category]))
+            node.setExpanded(True)
+
+    # -- export --
+
+    def _copy(self):
+        QApplication.clipboard().setText(export.as_text(self.current_list(), self.recipe_links))
+        self.statusBar().showMessage("Copied to clipboard", 3000)
+
+    def _save_csv(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Save list", "grocery-list.csv", "CSV (*.csv)")
+        if path:
+            Path(path).write_text(export.as_csv(self.current_list(), self.recipe_links), encoding="utf-8")
+            self.statusBar().showMessage(f"Saved {path}", 3000)
+
+    def _email(self):
+        addrs, ok = QInputDialog.getText(self, "Email list", "Send to (comma-separated):")
+        recipients = [a.strip() for a in addrs.split(",") if a.strip()]
+        if not ok or not recipients:
+            return
+        try:
+            export.send_email(recipients, export.as_text(self.current_list(), self.recipe_links))
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Email failed", str(exc))
         else:
-            st.markdown(f"- {name}")
+            self.statusBar().showMessage(f"Sent to {', '.join(recipients)}", 3000)
+
+
+def main():
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

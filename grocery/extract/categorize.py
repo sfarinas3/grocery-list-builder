@@ -1,26 +1,20 @@
-"""Assign each ingredient a shopping aisle (docs/design.md §3.3).
+"""Keyword lookup: ingredient name -> shopping aisle (docs/design.md §3.3).
 
-A keyword lookup (below) — free, instant, no model — handles the common case.
-`categorize()` also accepts an `Extractor` for a model-backed fallback on
-whatever the lookup misses (a hook `local_llm.py`'s dormant backend uses, see
-docs/design.md §3.3); the live `LiteExtractor` implements that hook as a
-no-op, so categorization is lookup-only in the app today.
-
-Anything still unassigned keeps `DEFAULT_CATEGORY` and gets a "needs_category"
-flag so the UI surfaces it for review (Quality Check #3).
+The first-choice categorizer for `extract/normalize.py`; the LLM only sees
+names this table doesn't recognize. Free, instant, and on the eval set more
+accurate than a small LLM at picking aisles — but it only knows the words
+below, and it's naive about compounds unless they're listed (longest keyword
+wins, so "peanut butter" must be listed or it matches "butter").
 """
 
 import re
 
-from grocery import config
-from grocery.extract.base import Extractor
-from grocery.models import Ingredient
 
 # The tweakable knob: which words map an ingredient to which aisle. Keywords are
 # matched whole-word and longest-first, so "black pepper" (spices) wins over
 # "pepper", and "olive oil" (condiments) wins over "oil". Add your own staples
-# freely — this table only needs to cover the common case; the LLM fallback and
-# human review handle the rest.
+# freely — this table only needs to cover the common case for when the LLM
+# is unavailable; human review handles the rest.
 _CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "produce": [
         "garlic", "onion", "scallion", "green onion", "shallot", "tomato", "lettuce",
@@ -42,10 +36,14 @@ _CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "pantry": [
         "flour", "all-purpose flour", "rice", "pasta", "spaghetti", "noodle",
         "oats", "quinoa", "lentil", "bean", "chickpea", "breadcrumb", "cornmeal",
+        "peanut butter",
     ],
     "canned & jarred": [
         "canned", "crushed tomatoes", "diced tomatoes", "tomato paste",
         "tomato sauce", "broth", "stock", "coconut milk",
+        # compounds that would otherwise match a shorter, wrong keyword
+        # ("chicken" -> meat), since longer keywords win:
+        "chicken broth", "chicken stock", "beef broth", "beef stock",
     ],
     "condiments & sauces": [
         "oil", "olive oil", "vegetable oil", "sesame oil", "soy sauce", "vinegar",
@@ -86,37 +84,3 @@ def lookup_category(name: str) -> str | None:
         if re.search(rf"\b{re.escape(keyword)}(?:es|s)?\b", text):
             return category
     return None
-
-
-def categorize(ingredients: list[Ingredient], *, extractor: Extractor | None = None) -> list[Ingredient]:
-    """Set `category` on each ingredient in place, then return the list.
-
-    Lookup handles the common case for free. Leftovers go to
-    `extractor.categorize()` — a no-op for the live `LiteExtractor`, so they
-    just get flagged for review; a model-backed `Extractor` could place more
-    of them here instead.
-    """
-    unresolved: list[Ingredient] = []
-    for ing in ingredients:
-        category = lookup_category(ing.name)
-        if category:
-            ing.category = category
-        else:
-            unresolved.append(ing)
-
-    if unresolved and extractor is not None:
-        # One call for all unique unknown names, constrained to valid categories.
-        names = list({ing.name for ing in unresolved})
-        mapping = extractor.categorize(names, config.CATEGORIES)
-        for ing in unresolved:
-            category = mapping.get(ing.name)
-            if category in config.CATEGORIES:
-                ing.category = category
-
-    # Anything still unassigned (lookup missed it and the LLM didn't place it)
-    # keeps the default sentinel — flag it for human review.
-    for ing in unresolved:
-        if ing.category not in config.CATEGORIES:
-            ing.flags.append("needs_category")
-
-    return ingredients

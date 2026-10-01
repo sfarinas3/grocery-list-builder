@@ -160,5 +160,20 @@
       {"name": "lime", "category": "produce"},
       {"name": "jasmine rice", "category": "pantry"}
     ]
+  },
+  {
+    "id": "ocr-chili-text",
+    "source": "text",
+    "text": "Partly Sunny 72°\n9:41 AM  87%\nGrandma's Chili\nPrep 20 min | Serves 6\nIngredients\n2 lbs ground beef\n1 large yellow onion, diced\n3 cloves garIic, minced\n1 (28 oz) can crushed tomatoes\n2 tbsp chili powder\n1 tsp cumin\nsalt and pepper to taste\nInstructions\n1. Brown the beef in a large pot.\n2. Add onion and garlic, cook 5 minutes.\n3. Stir in tomatoes and spices; simmer 30 minutes.\nShare  Save  Print",
+    "expected": [
+      {"name": "ground beef", "category": "meat & seafood"},
+      {"name": "yellow onion", "category": "produce"},
+      {"name": "garlic", "category": "produce"},
+      {"name": "crushed tomatoes", "category": "canned & jarred"},
+      {"name": "chili powder", "category": "spices & seasonings"},
+      {"name": "cumin", "category": "spices & seasonings"},
+      {"name": "salt", "category": "spices & seasonings"},
+      {"name": "pepper", "category": "spices & seasonings"}
+    ]
   }
 ]

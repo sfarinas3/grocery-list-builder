@@ -1,37 +1,25 @@
 # Project metadata + dependencies — the single source of truth for this project.
 # Managed with uv:  `uv sync` installs everything into .venv, `uv run ...` runs it.
 [project]
-name = "grocery-list-builder-bot"
-version = "0.1.0"
-description = "Turn recipe web links, documents, or photos into a consolidated, editable grocery list — no LLM required."
+name = "grocery-list-builder"
+version = "0.2.0"
+description = "Desktop app: turn recipe links, documents, or photos into a consolidated, editable grocery list with a small local LLM."
 readme = "README.md"
 requires-python = ">=3.12"
 
-# Base runtime dependencies — everything the app needs. No model of any kind:
-# ingredient-parser-nlp is a small trained CRF (not an LLM), and line-finding /
-# OCR are both plain deterministic code (extract/heuristic.py, extract/ocr.py).
 dependencies = [
     "httpx>=0.27",           # fetch recipe web pages
     "truststore>=0.10",      # make httpx/downloads trust the OS cert store (corporate TLS proxy)
     "trafilatura>=1.12",     # strip a page down to readable main content (text fallback)
     "ingredient-parser-nlp>=1.0",  # CRF model: ingredient line -> {qty, unit, name, comment}
     "pydantic>=2.9",         # the shared data contract in models.py (validation for free)
-    "streamlit>=1.39",       # the on-screen UI (app.py)
-    "pandas>=2.0",           # the editable list table (app.py)
-    "pypdf>=5.0",             # extract text from uploaded PDF recipes
-    "python-docx>=1.1",       # extract text from uploaded Word (.docx) recipes
-    "pytesseract>=0.3",       # OCR recipe photos (extract/ocr.py) — no model; needs the
-                               # tesseract-ocr system binary installed separately, see README.md
+    "llama-cpp-python==0.3.19",  # the local LLM (CPU). Pinned: prebuilt AVX2 wheel; newer wheels use AVX512 this CPU lacks
+    "PySide6>=6.7",          # the desktop window (app.py)
+    "pypdf>=5.0",             # extract text from PDF recipes
+    "python-docx>=1.1",       # extract text from Word (.docx) recipes
+    "pytesseract>=0.3",       # OCR recipe photos (extract/ocr.py); needs the tesseract-ocr
+                               # system binary installed separately, see README.md
     "Pillow>=10.0",           # image handling for OCR
-]
-
-# A local LLM backend (extract/local_llm.py, extract/vision.py) still exists in
-# the codebase but isn't wired into app.py — parked for a possible future
-# desktop build with real LLM hardware headroom. This extra is only needed to
-# run `eval/run.py` or experiment with those modules directly.
-[project.optional-dependencies]
-local = [
-    "llama-cpp-python==0.3.19",  # local GGUF model on CPU (pinned: prebuilt AVX2 wheel; newer wheels use AVX512 this CPU lacks)
 ]
 
 # Development-only tools (installed with `uv sync`, not shipped).
@@ -46,9 +34,8 @@ dev = [
 package = false
 # This machine is behind a TLS-inspecting corporate proxy, so uv must trust the
 # OS certificate store. Without this, `uv sync`/`uv add` fail with an
-# "UnknownIssuer" certificate error. (Using `native-tls` rather than the newer
-# `system-certs` so older uv versions on deploy hosts don't choke on it.)
-native-tls = true
+# "UnknownIssuer" certificate error.
+system-certs = true
 
 # Pull llama-cpp-python from the maintainer's prebuilt CPU wheel index so it
 # installs without a local C++ toolchain (there's no compiler on this machine).
